@@ -2,6 +2,7 @@
 // "Get a Hint" button shown in the editor toolbar
 // Sends problem + current code to Gemini → shows nudge without spoiling
 
+import { API_URL } from '../../utils/config.js';
 import { useState } from 'react';
 import AIGate from './AIGate.jsx';
 import { Lightbulb, X, Loader, ChevronDown, ChevronUp } from 'lucide-react';
@@ -18,7 +19,7 @@ function HintButtonInner({ problem, code, language }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/ai/hint', {
+      const res = await fetch((API_URL || '') + '/api/ai/hint', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ problem, code, language }),

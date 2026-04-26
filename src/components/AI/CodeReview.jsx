@@ -2,6 +2,7 @@
 // AI code review panel shown after all tests pass
 // Gemini reviews time/space complexity + gives improvement tips
 
+import { API_URL } from '../../utils/config.js';
 import { useState } from 'react';
 import AIGate from './AIGate.jsx';
 import { useAI } from './AIToggle.jsx';
@@ -20,7 +21,7 @@ export default function CodeReview({ problem, code, language, passed, total }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/ai/review', {
+      const res = await fetch((API_URL || '') + '/api/ai/review', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ problem, code, language, passed, total }),

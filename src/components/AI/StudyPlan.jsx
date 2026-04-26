@@ -2,6 +2,7 @@
 // Personalized 3-day study plan on the Dashboard
 // Gemini looks at weak topics + progress and recommends what to study
 
+import { API_URL } from '../../utils/config.js';
 import { useState, useEffect } from 'react';
 import { BookOpen, Loader, RefreshCw, Target, Calendar, Star } from 'lucide-react';
 import AIGate from './AIGate.jsx';
@@ -29,7 +30,7 @@ export default function StudyPlan() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/ai/studyplan', {
+      const res = await fetch((API_URL || '') + '/api/ai/studyplan', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
