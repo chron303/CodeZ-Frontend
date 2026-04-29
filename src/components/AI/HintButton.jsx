@@ -98,8 +98,11 @@ function HintButtonInner({ problem, code, language }) {
 }
 
 export default function HintButton(props) {
+  function goToPremium() {
+    window.dispatchEvent(new CustomEvent('navigate', { detail: 'premium' }));
+  }
   return (
-    <AIGate compact>
+    <AIGate compact onUpgrade={goToPremium}>
       <HintButtonInner {...props} />
     </AIGate>
   );

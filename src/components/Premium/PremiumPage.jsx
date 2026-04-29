@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react';
 import { Zap, Check, X, Crown, Lightbulb, Star, BookOpen,
          Shield, Loader, ChevronRight, Sparkles } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext.jsx';
+import { useAuth }    from '../../context/AuthContext.jsx';
+import { usePremium } from '../../context/PremiumContext.jsx';
 
 import { API_URL } from '../../utils/config.js';
 const API = API_URL;
@@ -86,19 +87,10 @@ function PlanCard({ plan, price, period, description, savings, selected, onSelec
 
 export default function PremiumPage({ onClose }) {
   const { user, userProfile } = useAuth();
+  const { premium: isPremium, premiumInfo, expiryText, daysRemaining } = usePremium();
   const [selectedPlan, setSelectedPlan] = useState('monthly');
   const [loading,      setLoading]      = useState(false);
-  const [status,       setStatus]       = useState(null); // null | 'success' | 'error'
-  const [isPremium,    setIsPremium]    = useState(false);
-  const [premiumInfo,  setPremiumInfo]  = useState(null);
-
-  useEffect(() => {
-    if (!user) return;
-    fetch(API + '/api/premium/status/' + user.uid)
-      .then(r => r.json())
-      .then(d => { setIsPremium(d.premium); setPremiumInfo(d); })
-      .catch(() => {});
-  }, [user]);
+  const [status,       setStatus]       = useState(null);
 
   // Load Razorpay SDK
   useEffect(() => {
@@ -149,7 +141,6 @@ export default function PremiumPage({ onClose }) {
           });
           const verified = await verifyRes.json();
           if (!verifyRes.ok) throw new Error(verified.error);
-          setIsPremium(true);
           setStatus('success');
           setLoading(false);
         },
@@ -172,8 +163,8 @@ export default function PremiumPage({ onClose }) {
   }
 
   // Already premium
-  if (isPremium && premiumInfo) {
-    const exp = premiumInfo.expiresAt ? new Date(premiumInfo.expiresAt) : null;
+  if (isPremium) {
+    const exp = premiumInfo?.expiresAt || null;
     return (
       <div className="max-w-lg mx-auto text-center space-y-6 py-8">
         <div className="w-16 h-16 rounded-2xl bg-purple-600/20 border border-purple-500/30
@@ -183,7 +174,7 @@ export default function PremiumPage({ onClose }) {
         <div>
           <h2 className="text-xl font-bold text-white mb-2">You're Premium! 👑</h2>
           <p className="text-slate-400 text-sm">
-            {exp ? `Active until ${exp.toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'})}` : 'Active'}
+            {isPremium ? expiryText() : 'Active'}
           </p>
         </div>
         <div className="game-card p-4 space-y-2 text-left">

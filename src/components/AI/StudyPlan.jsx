@@ -6,6 +6,7 @@ import { API_URL } from '../../utils/config.js';
 import { useState, useEffect } from 'react';
 import { BookOpen, Loader, RefreshCw, Target, Calendar, Star } from 'lucide-react';
 import AIGate from './AIGate.jsx';
+import { usePremium } from '../../context/PremiumContext.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 const DAY_COLORS = [
@@ -16,14 +17,15 @@ const DAY_COLORS = [
 
 export default function StudyPlan() {
   const { summary, progression } = useApp();
+  const { premium } = usePremium();
   const [plan,    setPlan]    = useState(null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
-  // Auto-fetch on mount
+  // Auto-fetch on mount only if premium
   useEffect(() => {
-    if (summary?.totalProblems > 0) fetchPlan();
-  }, []);
+    if (summary?.totalProblems > 0 && premium) fetchPlan();
+  }, [premium]);
 
   async function fetchPlan() {
     if (loading) return;

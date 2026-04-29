@@ -5,6 +5,7 @@ import { Map, BarChart3, Code2, Gamepad, Settings,
 import { AuthProvider, useAuth }   from './context/AuthContext.jsx';
 import { AppProvider, useApp }     from './context/AppContext.jsx';
 import { ThemeProvider, useTheme } from './themes/ThemeContext.jsx';
+import { PremiumProvider, usePremium } from './context/PremiumContext.jsx';
 import LoginPage      from './components/Auth/LoginPage.jsx';
 import AdminPanel     from './components/Admin/AdminPanel.jsx';
 import TopicCity      from './components/TopicViz/TopicCity.jsx';
@@ -151,6 +152,7 @@ function UserMenu() {
 function Nav({ tab, onTabChange, onSettings, onProfile }) {
   const { summary, progression, topics } = useApp();
   const { isMario } = useTheme();
+  const { premium: isPremium, daysRemaining } = usePremium();
   const hasData = topics.length > 0;
 
   const items = [
@@ -207,6 +209,15 @@ function Nav({ tab, onTabChange, onSettings, onProfile }) {
         </div>
       )}
 
+      {isPremium && (
+        <div className="hidden sm:flex items-center gap-1 px-2 py-1
+          bg-purple-500/15 border border-purple-500/30 rounded-full shrink-0">
+          <Crown className="w-3 h-3 text-purple-400"/>
+          <span className="text-purple-400 text-xs font-medium">
+            {daysRemaining() !== null ? daysRemaining() + 'd' : '∞'}
+          </span>
+        </div>
+      )}
       <CsvImportButton />
       <ThemeToggle />
       <AIToggle />
@@ -286,8 +297,13 @@ function AppInner() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowSettings(s => !s); }
       if (e.key === 'Escape') setShowSettings(false);
     };
+    const openPremium = () => onTabChange('premium');
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('open-premium', openPremium);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener('open-premium', openPremium);
+    };
   }, []);
 
   if (dataLoading) return (
@@ -399,7 +415,9 @@ export default function App() {
     <ThemeProvider>
       <MarioBackground />
       <AuthProvider>
-        <Root />
+        <PremiumProvider>
+          <Root />
+        </PremiumProvider>
       </AuthProvider>
     </ThemeProvider>
   );

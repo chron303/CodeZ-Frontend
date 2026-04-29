@@ -22,6 +22,8 @@ import TestResults    from './TestResults.jsx';
 import PixelCharacter from './PixelCharacter.jsx';
 import ProblemBrowser from './ProblemBrowser.jsx';
 import HintButton    from '../AI/HintButton.jsx';
+import PremiumGate   from '../Premium/PremiumGate.jsx';
+import { usePremium } from '../../context/PremiumContext.jsx';
 
 // ── Language picker ────────────────────────────────────────────
 function LangPicker({ langId, onChange }) {
@@ -130,6 +132,7 @@ const MONACO_OPTIONS = {
 // ── Main ───────────────────────────────────────────────────────
 export default function EditorView() {
   const { activeProblem, markSolved, showToast } = useApp();
+  const { premium } = usePremium();
 
   const [langId,       setLangId]       = useState(() => loadLang());
   const [code,         setCode]         = useState(() => getStarterCode(loadLang(), null));

@@ -12,6 +12,7 @@ import {
 import { useAuth }  from '../../context/AuthContext.jsx';
 import { useTheme } from '../../themes/ThemeContext.jsx';
 import { BUILT_IN_PROBLEMS } from '../../utils/builtInProblems.js';
+import PremiumManager from './PremiumManager.jsx';
 
 const DIFFICULTIES = ['Easy','Medium','Hard'];
 const TOPICS = [
@@ -25,7 +26,7 @@ const LANGS = ['cpp','python','java'];
 
 function emptyProblem() {
   return {
-    title: '', topic: 'Arrays', difficulty: 'Easy',
+    title: '', topic: 'Arrays', difficulty: 'Easy', isPremium: false,
     description: '', url: '', tags: [], order: 0,
     testCases: [
       { id:1, input:'', stdinLines:'', expected:'', label:'Example 1', hidden:false },
@@ -519,6 +520,7 @@ export default function AdminPanel() {
   const [problems,       setProblems]       = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [mode,           setMode]           = useState('list');
+  const [adminTab,       setAdminTab]       = useState('problems'); // problems | premium
   const [editingProblem, setEditingProblem] = useState(null);
   const [saving,         setSaving]         = useState(false);
   const [deletingId,     setDeletingId]     = useState(null);
@@ -644,7 +646,24 @@ export default function AdminPanel() {
         )}
 
         {/* Confirm delete */}
-        {confirmDelete && (
+        {/* Admin tabs */}
+      <div className="flex gap-2 mb-5 border-b border-game-border pb-3">
+        {[['problems','Problems'],['premium','Premium Users']].map(([id,label]) => (
+          <button key={id} onClick={() => setAdminTab(id)}
+            className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors
+              ${adminTab===id
+                ?'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+                :'text-slate-500 hover:text-slate-300'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {adminTab === 'premium' && <PremiumManager />}
+
+      {adminTab === 'problems' && <>
+
+      {confirmDelete && (
           <div className="mb-4 flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
             <AlertTriangle className="w-4 h-4 text-red-400 shrink-0"/>
             <p className="text-red-300 text-sm flex-1">
@@ -744,6 +763,8 @@ export default function AdminPanel() {
             </>
           )
         )}
+      </>
+      }
       </main>
     </div>
   );

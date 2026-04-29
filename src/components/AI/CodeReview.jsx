@@ -5,12 +5,14 @@
 import { API_URL } from '../../utils/config.js';
 import { useState } from 'react';
 import AIGate from './AIGate.jsx';
-import { useAI } from './AIToggle.jsx';
+import { useAI }      from './AIToggle.jsx';
+import { usePremium } from '../../context/PremiumContext.jsx';
 import { Star, Loader, ChevronDown, ChevronUp, TrendingUp, AlertCircle, Check } from 'lucide-react';
 
 export default function CodeReview({ problem, code, language, passed, total }) {
   const aiEnabled = useAI();
-  if (!aiEnabled) return null; // hidden completely when AI off
+  const { premium } = usePremium();
+  if (!aiEnabled || !premium) return null; // hidden when AI off or not premium
   const [review,  setReview]  = useState(null);
   const [loading, setLoading] = useState(false);
   const [open,    setOpen]    = useState(false);
