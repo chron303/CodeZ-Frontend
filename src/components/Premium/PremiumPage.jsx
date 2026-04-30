@@ -91,6 +91,7 @@ export default function PremiumPage({ onClose }) {
   const [selectedPlan, setSelectedPlan] = useState('monthly');
   const [loading,      setLoading]      = useState(false);
   const [status,       setStatus]       = useState(null);
+  const [errorMsg,     setErrorMsg]     = useState('');
 
   // Load Razorpay SDK
   useEffect(() => {
@@ -128,21 +129,27 @@ export default function PremiumPage({ onClose }) {
         },
         theme: { color: '#7c3aed' },
         handler: async function(response) {
-          // Verify payment
-          const verifyRes = await fetch(API + '/api/premium/verify', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id:   response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature:  response.razorpay_signature,
-              uid:  user.uid,
-              plan: selectedPlan,
-            }),
-          });
-          const verified = await verifyRes.json();
-          if (!verifyRes.ok) throw new Error(verified.error);
-          setStatus('success');
-          setLoading(false);
+          try {
+            const verifyRes = await fetch(API + '/api/premium/verify', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id:   response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature:  response.razorpay_signature,
+                uid:  user.uid,
+                plan: selectedPlan,
+              }),
+            });
+            const verified = await verifyRes.json();
+            if (!verifyRes.ok) throw new Error(verified.error || 'Verification failed');
+            setStatus('success');
+            setLoading(false);
+          } catch(verifyErr) {
+            console.error('[Razorpay] Verify error:', verifyErr.message);
+            setErrorMsg('Payment done but verification failed: ' + verifyErr.message);
+            setStatus('error');
+            setLoading(false);
+          }
         },
         modal: {
           ondismiss: function() { setLoading(false); },
@@ -151,12 +158,15 @@ export default function PremiumPage({ onClose }) {
 
       if (!window.Razorpay) throw new Error('Razorpay SDK not loaded. Check your connection.');
       const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function() {
+      rzp.on('payment.failed', function(response) {
+        console.error('[Razorpay] Payment failed:', response.error);
+        setErrorMsg(response.error?.description || 'Payment was declined. Please try again.');
         setStatus('error'); setLoading(false);
       });
       rzp.open();
     } catch(e) {
-      console.error(e);
+      console.error('[Premium] Error:', e.message);
+      setErrorMsg(e.message || 'Something went wrong. Please try again.');
       setStatus('error');
       setLoading(false);
     }
@@ -273,7 +283,7 @@ export default function PremiumPage({ onClose }) {
         {status === 'error' && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
             <X className="w-4 h-4 text-red-400 shrink-0"/>
-            <p className="text-red-400 text-sm">Payment failed. Please try again.</p>
+            <p className="text-red-400 text-sm">{errorMsg || 'Payment failed. Please try again.'}</p>
           </div>
         )}
 
