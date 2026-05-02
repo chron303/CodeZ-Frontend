@@ -17,6 +17,7 @@ import AchievementsGrid from '../Stats/AchievementsGrid.jsx';
 import LeetCodeSync    from '../Stats/LeetCodeSync.jsx';
 import { xpProgress }  from '../../utils/progression.js';
 import StudyPlan       from '../AI/StudyPlan.jsx';
+import ReviewDashboard from '../Review/ReviewDashboard.jsx';
 
 // ── Stat card ─────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, color, sub }) {
@@ -198,7 +199,7 @@ function ProgressControls() {
 }
 
 // ── Main ───────────────────────────────────────────────────────
-export default function Dashboard() {
+export default function Dashboard({ onPractice }) {
   const { topics, summary, progression } = useApp();
 
   if (topics.length === 0) {
@@ -211,6 +212,15 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
+      {/* ── Spaced Repetition Reviews ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="text-sm font-semibold text-white">Review Schedule</h3>
+          <span className="text-xs text-slate-600">Spaced repetition</span>
+        </div>
+        <ReviewDashboard onPractice={onPractice} />
+      </div>
+
       {/* ── AI Study Plan ── */}
       <StudyPlan />
 

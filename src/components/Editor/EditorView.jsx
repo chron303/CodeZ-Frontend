@@ -21,7 +21,8 @@ import ProblemPanel   from './ProblemPanel.jsx';
 import TestResults    from './TestResults.jsx';
 import PixelCharacter from './PixelCharacter.jsx';
 import ProblemBrowser from './ProblemBrowser.jsx';
-import HintButton    from '../AI/HintButton.jsx';
+import HintButton       from '../AI/HintButton.jsx';
+import ReviewScheduler from '../Review/ReviewScheduler.jsx';
 import PremiumGate   from '../Premium/PremiumGate.jsx';
 import { usePremium } from '../../context/PremiumContext.jsx';
 
@@ -56,7 +57,7 @@ function LangPicker({ langId, onChange }) {
 }
 
 // ── Toolbar ────────────────────────────────────────────────────
-function Toolbar({ activeProblem, isRunning, langId, onLangChange, onRun, onReset, showBrowser, onToggleBrowser, code }) {
+function Toolbar({ activeProblem, isRunning, langId, onLangChange, onRun, onReset, showBrowser, onToggleBrowser, code, judgeResult }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-b border-game-border bg-game-card shrink-0">
       {/* Browser toggle */}
@@ -72,6 +73,7 @@ function Toolbar({ activeProblem, isRunning, langId, onLangChange, onRun, onRese
 
       <LangPicker langId={langId} onChange={onLangChange} />
       <HintButton problem={activeProblem} code={code} language={langId} />
+      {activeProblem && <ReviewScheduler problem={activeProblem} />}
 
       {activeProblem?.solved && (
         <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-1 rounded">
@@ -222,7 +224,7 @@ export default function EditorView() {
   const monacoLang    = getLanguage(langId).monaco;
   const toolbarProps  = { activeProblem, isRunning, langId, onLangChange: handleLangChange,
                           onRun: handleRun, onReset: handleReset,
-                          showBrowser, onToggleBrowser: () => setShowBrowser(s => !s), code };
+                          showBrowser, onToggleBrowser: () => setShowBrowser(s => !s), code, judgeResult };
   const resultsProps  = { charState, passingTests, judgeResult, isRunning, problem: activeProblem, code, language: langId };
   const editorEl      = (
     <Editor

@@ -21,6 +21,7 @@ import PremiumPage    from './components/Premium/PremiumPage.jsx';
 import AIToggle       from './components/AI/AIToggle.jsx';
 import ThemeToggle    from './components/Mario/ThemeToggle.jsx';
 import MarioBackground from './components/Mario/MarioBackground.jsx';
+import ReviewPopup     from './components/Review/ReviewPopup.jsx';
 import { uploadFile } from './utils/api.js';
 import './index.css';
 
@@ -367,7 +368,7 @@ function AppInner() {
               <h2 className="pixel text-sm text-blue-400">Stats</h2>
               <p className="text-slate-500 text-xs mt-1">Your progress across all topics</p>
             </div>
-            <Dashboard />
+            <Dashboard onPractice={handlePractice} />
           </div>
         )}
       </main>
@@ -384,6 +385,10 @@ function AppInner() {
       )}
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      <ReviewPopup
+        onPractice={handlePractice}
+        onDismissAll={() => {}}
+      />
       <Toast />
     </div>
   );
