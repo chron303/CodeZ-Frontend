@@ -1,14 +1,137 @@
 // frontend/src/components/Auth/LoginPage.jsx
-// Login with Google OR Email OTP
+// Three login options:
+//   1. Google (OAuth)
+//   2. Email + Password (Firebase, free unlimited)
+//   3. Phone + OTP (Firebase Phone Auth, free 10/day)
 
-import { useState } from 'react';
-import { signInWithCustomToken } from 'firebase/auth';
+import { useState, useRef, useEffect } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+} from 'firebase/auth';
 import { auth } from '../../firebase.js';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Mail, ArrowRight, RefreshCw, CheckCircle, Loader, ChevronLeft } from 'lucide-react';
+import { Mail, Lock, User, Phone, Eye, EyeOff,
+         ArrowRight, Loader, CheckCircle, ChevronLeft,
+         ChevronDown, Search } from 'lucide-react';
 
-import { API_URL } from '../../utils/config.js';
-const API = API_URL;
+// ── Country codes ──────────────────────────────────────────────
+const COUNTRIES = [
+  { code: '+91',  flag: '🇮🇳', name: 'India',          short: 'IN' },
+  { code: '+1',   flag: '🇺🇸', name: 'United States',   short: 'US' },
+  { code: '+44',  flag: '🇬🇧', name: 'United Kingdom',  short: 'GB' },
+  { code: '+61',  flag: '🇦🇺', name: 'Australia',       short: 'AU' },
+  { code: '+1',   flag: '🇨🇦', name: 'Canada',          short: 'CA' },
+  { code: '+49',  flag: '🇩🇪', name: 'Germany',         short: 'DE' },
+  { code: '+33',  flag: '🇫🇷', name: 'France',          short: 'FR' },
+  { code: '+81',  flag: '🇯🇵', name: 'Japan',           short: 'JP' },
+  { code: '+86',  flag: '🇨🇳', name: 'China',           short: 'CN' },
+  { code: '+55',  flag: '🇧🇷', name: 'Brazil',          short: 'BR' },
+  { code: '+7',   flag: '🇷🇺', name: 'Russia',          short: 'RU' },
+  { code: '+82',  flag: '🇰🇷', name: 'South Korea',     short: 'KR' },
+  { code: '+65',  flag: '🇸🇬', name: 'Singapore',       short: 'SG' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE',             short: 'AE' },
+  { code: '+27',  flag: '🇿🇦', name: 'South Africa',    short: 'ZA' },
+  { code: '+234', flag: '🇳🇬', name: 'Nigeria',         short: 'NG' },
+  { code: '+92',  flag: '🇵🇰', name: 'Pakistan',        short: 'PK' },
+  { code: '+880', flag: '🇧🇩', name: 'Bangladesh',      short: 'BD' },
+  { code: '+94',  flag: '🇱🇰', name: 'Sri Lanka',       short: 'LK' },
+  { code: '+977', flag: '🇳🇵', name: 'Nepal',           short: 'NP' },
+  { code: '+60',  flag: '🇲🇾', name: 'Malaysia',        short: 'MY' },
+  { code: '+66',  flag: '🇹🇭', name: 'Thailand',        short: 'TH' },
+  { code: '+62',  flag: '🇮🇩', name: 'Indonesia',       short: 'ID' },
+  { code: '+63',  flag: '🇵🇭', name: 'Philippines',     short: 'PH' },
+  { code: '+20',  flag: '🇪🇬', name: 'Egypt',           short: 'EG' },
+  { code: '+254', flag: '🇰🇪', name: 'Kenya',           short: 'KE' },
+  { code: '+52',  flag: '🇲🇽', name: 'Mexico',          short: 'MX' },
+  { code: '+54',  flag: '🇦🇷', name: 'Argentina',       short: 'AR' },
+  { code: '+34',  flag: '🇪🇸', name: 'Spain',           short: 'ES' },
+  { code: '+39',  flag: '🇮🇹', name: 'Italy',           short: 'IT' },
+];
+
+// ── Shared input component ─────────────────────────────────────
+function Input({ icon: Icon, type='text', value, onChange, placeholder, right, autoFocus }) {
+  return (
+    <div className="relative flex items-center">
+      {Icon && <Icon className="absolute left-3 w-4 h-4 text-slate-600 shrink-0"/>}
+      <input
+        type={type} value={value} onChange={onChange}
+        placeholder={placeholder} autoFocus={autoFocus}
+        className={`w-full py-3 text-sm bg-game-surface border border-game-border
+          rounded-xl text-white placeholder-slate-700 outline-none
+          focus:border-purple-500/60 transition-colors
+          ${Icon ? 'pl-10' : 'pl-4'} ${right ? 'pr-10' : 'pr-4'}`}
+      />
+      {right}
+    </div>
+  );
+}
+
+// ── Country picker ─────────────────────────────────────────────
+function CountryPicker({ selected, onSelect }) {
+  const [open,   setOpen]   = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function close(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  const filtered = COUNTRIES.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.code.includes(search) || c.short.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 h-full px-3 py-3 bg-game-surface
+          border border-game-border rounded-xl text-sm text-white
+          hover:border-purple-500/40 transition-colors whitespace-nowrap">
+        <span className="text-base">{selected.flag}</span>
+        <span className="text-slate-400">{selected.code}</span>
+        <ChevronDown className={`w-3 h-3 text-slate-600 transition-transform ${open?'rotate-180':''}`}/>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 game-card w-64 overflow-hidden"
+          style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+          {/* Search */}
+          <div className="p-2 border-b border-game-border">
+            <div className="flex items-center gap-2 px-2 py-1.5 bg-game-surface rounded-lg">
+              <Search className="w-3.5 h-3.5 text-slate-600 shrink-0"/>
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search country…" autoFocus
+                className="flex-1 bg-transparent text-xs text-slate-300 outline-none
+                  placeholder-slate-700"/>
+            </div>
+          </div>
+          {/* List */}
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.map((c, i) => (
+              <button key={i} type="button"
+                onClick={() => { onSelect(c); setOpen(false); setSearch(''); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm
+                  hover:bg-game-surface transition-colors text-left
+                  ${selected.code === c.code && selected.short === c.short
+                    ? 'bg-purple-500/10 text-purple-300' : 'text-slate-400'}`}>
+                <span className="text-base shrink-0">{c.flag}</span>
+                <span className="flex-1 truncate">{c.name}</span>
+                <span className="text-slate-600 text-xs shrink-0">{c.code}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Google button ──────────────────────────────────────────────
 function GoogleButton({ onClick, loading }) {
@@ -17,8 +140,7 @@ function GoogleButton({ onClick, loading }) {
       className="w-full flex items-center justify-center gap-3 px-5 py-3 rounded-xl
         bg-white hover:bg-gray-50 text-gray-800 font-medium text-sm
         border border-gray-200 transition-all duration-200
-        disabled:opacity-50 disabled:cursor-not-allowed
-        hover:shadow-lg active:scale-[0.98]">
+        disabled:opacity-50 hover:shadow-lg active:scale-[0.98]">
       {loading
         ? <Loader className="w-4 h-4 animate-spin text-gray-500"/>
         : <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -33,127 +155,340 @@ function GoogleButton({ onClick, loading }) {
   );
 }
 
-// ── OTP flow ───────────────────────────────────────────────────
-function OTPLogin({ onBack }) {
-  const [step,    setStep]    = useState('email'); // email | code
-  const [email,   setEmail]   = useState('');
-  const [code,    setCode]    = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const [success, setSuccess] = useState(false);
-  const [resendCd,setResendCd]= useState(0);
+// ── Email + Password flow ──────────────────────────────────────
+function EmailPasswordFlow({ onBack }) {
+  const [step,      setStep]      = useState('choose'); // choose | signin | signup | reset | profile
+  const [name,      setName]      = useState('');
+  const [email,     setEmail]     = useState('');
+  const [password,  setPassword]  = useState('');
+  const [confirm,   setConfirm]   = useState('');
+  const [showPw,    setShowPw]    = useState(false);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
-  async function sendOTP() {
-    if (!email.trim()) { setError('Enter your email address.'); return; }
+  function firebaseError(e) {
+    const map = {
+      'auth/user-not-found':      'No account found with this email.',
+      'auth/wrong-password':      'Incorrect password.',
+      'auth/email-already-in-use':'An account already exists with this email.',
+      'auth/weak-password':       'Password must be at least 6 characters.',
+      'auth/invalid-email':       'Please enter a valid email address.',
+      'auth/too-many-requests':   'Too many attempts. Please try again later.',
+      'auth/invalid-credential':  'Incorrect email or password.',
+    };
+    return map[e.code] || e.message;
+  }
+
+  async function handleSignIn() {
+    if (!email || !password) { setError('Enter email and password.'); return; }
     setLoading(true); setError('');
     try {
-      const res  = await fetch(API + '/api/otp/send', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to send code');
-      setStep('code');
-      setResendCd(60);
-      const timer = setInterval(() => setResendCd(c => { if (c<=1) { clearInterval(timer); return 0; } return c-1; }), 1000);
-    } catch(e) { setError(e.message); }
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch(e) { setError(firebaseError(e)); }
     finally { setLoading(false); }
   }
 
-  async function verifyOTP() {
-    if (code.length !== 6) { setError('Enter the 6-digit code.'); return; }
+  async function handleSignUp() {
+    if (!name.trim())          { setError('Enter your name.'); return; }
+    if (!email)                { setError('Enter your email.'); return; }
+    if (password.length < 6)  { setError('Password must be at least 6 characters.'); return; }
+    if (password !== confirm)  { setError('Passwords do not match.'); return; }
     setLoading(true); setError('');
     try {
-      const res  = await fetch(API + '/api/otp/verify', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Verification failed');
-      // Sign into Firebase with custom token
-      await signInWithCustomToken(auth, data.token);
-      setSuccess(true);
-    } catch(e) { setError(e.message); }
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: name.trim() });
+    } catch(e) { setError(firebaseError(e)); }
     finally { setLoading(false); }
   }
 
-  if (success) return (
-    <div className="flex flex-col items-center gap-3 py-4">
-      <CheckCircle className="w-10 h-10 text-green-400"/>
-      <p className="text-white font-medium">Signed in!</p>
-      <p className="text-slate-500 text-sm">Redirecting…</p>
-    </div>
+  async function handleReset() {
+    if (!email) { setError('Enter your email first.'); return; }
+    setLoading(true); setError('');
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetSent(true);
+    } catch(e) { setError(firebaseError(e)); }
+    finally { setLoading(false); }
+  }
+
+  const PwToggle = (
+    <button type="button" onClick={() => setShowPw(s => !s)}
+      className="absolute right-3 text-slate-600 hover:text-slate-300 transition-colors">
+      {showPw ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+    </button>
   );
 
   return (
     <div className="space-y-4">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-slate-600
-        hover:text-slate-300 transition-colors">
+      <button onClick={onBack}
+        className="flex items-center gap-1.5 text-xs text-slate-600
+          hover:text-slate-300 transition-colors">
         <ChevronLeft className="w-3.5 h-3.5"/> Back
       </button>
 
-      {step === 'email' ? (
-        <>
-          <div>
-            <label className="text-xs text-slate-500 mb-1.5 block">Email address</label>
-            <input
-              type="email" value={email}
-              onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key==='Enter' && sendOTP()}
-              placeholder="you@example.com"
-              autoFocus
-              className="w-full px-4 py-3 text-sm bg-game-surface border border-game-border
-                rounded-xl text-white placeholder-slate-700 outline-none
-                focus:border-purple-500/60 transition-colors"/>
+      {/* Choose sign in or sign up */}
+      {step === 'choose' && (
+        <div className="space-y-3">
+          <p className="text-white font-semibold text-sm text-center">Continue with Email</p>
+          <button onClick={() => setStep('signin')}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl
+              bg-game-surface border border-game-border text-slate-300
+              hover:border-purple-500/50 hover:text-white transition-all group">
+            <span className="text-sm">Sign in to existing account</span>
+            <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-purple-400 transition-colors"/>
+          </button>
+          <button onClick={() => setStep('signup')}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl
+              bg-purple-600/15 border border-purple-500/30 text-purple-300
+              hover:bg-purple-600/25 transition-all group">
+            <span className="text-sm font-medium">Create new account</span>
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform"/>
+          </button>
+        </div>
+      )}
+
+      {/* Sign in */}
+      {step === 'signin' && (
+        <div className="space-y-3">
+          <p className="text-white font-semibold text-sm">Sign in</p>
+          <Input icon={Mail} type="email" value={email}
+            onChange={e => setEmail(e.target.value)} placeholder="Email address" autoFocus/>
+          <div className="relative">
+            <Input icon={Lock} type={showPw?'text':'password'} value={password}
+              onChange={e => setPassword(e.target.value)} placeholder="Password" right={PwToggle}
+              onKeyDown={e => e.key==='Enter' && handleSignIn()}/>
           </div>
           {error && <p className="text-red-400 text-xs">{error}</p>}
-          <button onClick={sendOTP} disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl
-              text-sm font-semibold bg-purple-600 hover:bg-purple-500 text-white
-              disabled:opacity-40 transition-colors">
-            {loading ? <Loader className="w-4 h-4 animate-spin"/> : <Mail className="w-4 h-4"/>}
-            {loading ? 'Sending…' : 'Send Login Code'}
+          <button onClick={handleSignIn} disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+              text-sm font-semibold text-white disabled:opacity-40 transition-all hover:scale-[1.01]"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#1d4ed8)' }}>
+            {loading ? <Loader className="w-4 h-4 animate-spin"/> : <ArrowRight className="w-4 h-4"/>}
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
-        </>
-      ) : (
-        <>
-          <div className="text-center py-2">
-            <p className="text-slate-400 text-sm">Code sent to</p>
-            <p className="text-white font-medium">{email}</p>
+          <button onClick={() => setStep('reset')}
+            className="w-full text-xs text-slate-600 hover:text-purple-400 transition-colors text-center">
+            Forgot password?
+          </button>
+        </div>
+      )}
+
+      {/* Sign up */}
+      {step === 'signup' && (
+        <div className="space-y-3">
+          <p className="text-white font-semibold text-sm">Create account</p>
+          <Input icon={User} value={name} onChange={e => setName(e.target.value)}
+            placeholder="Your full name" autoFocus/>
+          <Input icon={Mail} type="email" value={email}
+            onChange={e => setEmail(e.target.value)} placeholder="Email address"/>
+          <div className="relative">
+            <Input icon={Lock} type={showPw?'text':'password'} value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password (min 6 chars)" right={PwToggle}/>
+          </div>
+          <Input icon={Lock} type={showPw?'text':'password'} value={confirm}
+            onChange={e => setConfirm(e.target.value)} placeholder="Confirm password"
+            onKeyDown={e => e.key==='Enter' && handleSignUp()}/>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+          <button onClick={handleSignUp} disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+              text-sm font-semibold text-white disabled:opacity-40 transition-all hover:scale-[1.01]"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#1d4ed8)' }}>
+            {loading ? <Loader className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>}
+            {loading ? 'Creating account…' : 'Create Account'}
+          </button>
+        </div>
+      )}
+
+      {/* Password reset */}
+      {step === 'reset' && (
+        <div className="space-y-3">
+          <p className="text-white font-semibold text-sm">Reset password</p>
+          {resetSent ? (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <CheckCircle className="w-10 h-10 text-green-400"/>
+              <p className="text-green-400 text-sm font-medium">Reset email sent!</p>
+              <p className="text-slate-500 text-xs">
+                Check your inbox for a password reset link from Firebase.
+              </p>
+              <button onClick={() => setStep('signin')}
+                className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+                Back to sign in
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-slate-500 text-xs">
+                Enter your email and we'll send a reset link via Firebase (free, instant).
+              </p>
+              <Input icon={Mail} type="email" value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Your email address" autoFocus/>
+              {error && <p className="text-red-400 text-xs">{error}</p>}
+              <button onClick={handleReset} disabled={loading}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+                  text-sm font-semibold text-white disabled:opacity-40 transition-colors"
+                style={{ background: 'linear-gradient(135deg,#7c3aed,#1d4ed8)' }}>
+                {loading ? <Loader className="w-4 h-4 animate-spin"/> : <Mail className="w-4 h-4"/>}
+                {loading ? 'Sending…' : 'Send Reset Link'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Phone Auth flow ────────────────────────────────────────────
+function PhoneFlow({ onBack }) {
+  const [country,    setCountry]    = useState(COUNTRIES[0]); // India default
+  const [phone,      setPhone]      = useState('');
+  const [otp,        setOtp]        = useState('');
+  const [step,       setStep]       = useState('phone'); // phone | otp
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState('');
+  const [confirm,    setConfirm]    = useState(null);
+  const recaptchaRef = useRef(null);
+
+  useEffect(() => {
+    // Setup invisible reCAPTCHA
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {},
+      });
+    }
+    return () => {
+      // Cleanup
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear?.();
+        window.recaptchaVerifier = null;
+      }
+    };
+  }, []);
+
+  async function sendOTP() {
+    const fullPhone = country.code + phone.replace(/\s/g, '');
+    if (phone.length < 7) { setError('Enter a valid phone number.'); return; }
+    setLoading(true); setError('');
+    try {
+      const verifier = window.recaptchaVerifier;
+      const result   = await signInWithPhoneNumber(auth, fullPhone, verifier);
+      setConfirm(result);
+      setStep('otp');
+    } catch(e) {
+      console.error(e);
+      setError(e.message?.includes('TOO_LONG') ? 'Phone number too long.'
+        : e.message?.includes('INVALID') ? 'Invalid phone number format.'
+        : e.message?.includes('quota') ? 'Daily SMS limit reached. Try email login.'
+        : 'Failed to send OTP: ' + e.message);
+      // Reset recaptcha on error
+      window.recaptchaVerifier?.clear?.();
+      window.recaptchaVerifier = null;
+    } finally { setLoading(false); }
+  }
+
+  async function verifyOTP() {
+    if (otp.length !== 6) { setError('Enter the 6-digit code.'); return; }
+    setLoading(true); setError('');
+    try {
+      await confirm.confirm(otp);
+    } catch(e) {
+      setError(e.code === 'auth/invalid-verification-code'
+        ? 'Incorrect code. Please try again.'
+        : 'Verification failed: ' + e.message);
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack}
+        className="flex items-center gap-1.5 text-xs text-slate-600
+          hover:text-slate-300 transition-colors">
+        <ChevronLeft className="w-3.5 h-3.5"/> Back
+      </button>
+
+      {step === 'phone' && (
+        <div className="space-y-3">
+          <div>
+            <p className="text-white font-semibold text-sm mb-1">Phone number</p>
+            <p className="text-slate-600 text-xs">
+              Firebase sends a free verification SMS. Limit: 10/day on free tier.
+            </p>
           </div>
 
-          <div>
-            <label className="text-xs text-slate-500 mb-1.5 block">6-digit code</label>
-            <input
-              type="text" inputMode="numeric" maxLength={6}
-              value={code} onChange={e => setCode(e.target.value.replace(/\D/g,'').slice(0,6))}
-              onKeyDown={e => e.key==='Enter' && verifyOTP()}
-              placeholder="000000"
-              autoFocus
-              className="w-full px-4 py-3 text-2xl font-mono text-center tracking-[12px]
-                bg-game-surface border border-game-border rounded-xl text-white
-                placeholder-slate-700 outline-none focus:border-purple-500/60 transition-colors"/>
+          <div className="flex gap-2">
+            <CountryPicker selected={country} onSelect={setCountry}/>
+            <div className="flex-1 relative flex items-center">
+              <Phone className="absolute left-3 w-4 h-4 text-slate-600"/>
+              <input
+                type="tel" value={phone}
+                onChange={e => setPhone(e.target.value.replace(/[^\d\s\-]/g, ''))}
+                onKeyDown={e => e.key === 'Enter' && sendOTP()}
+                placeholder="Phone number" autoFocus
+                className="w-full pl-10 pr-4 py-3 text-sm bg-game-surface border border-game-border
+                  rounded-xl text-white placeholder-slate-700 outline-none
+                  focus:border-purple-500/60 transition-colors"/>
+            </div>
           </div>
+
+          {/* Preview */}
+          {phone && (
+            <p className="text-xs text-slate-600 text-center">
+              Sending to: <span className="text-slate-400">{country.code} {phone}</span>
+            </p>
+          )}
+
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+
+          {/* Invisible reCAPTCHA container */}
+          <div id="recaptcha-container" ref={recaptchaRef}/>
+
+          <button onClick={sendOTP} disabled={loading || !phone}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+              text-sm font-semibold text-white disabled:opacity-40 transition-all hover:scale-[1.01]"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#1d4ed8)' }}>
+            {loading ? <Loader className="w-4 h-4 animate-spin"/> : <Phone className="w-4 h-4"/>}
+            {loading ? 'Sending code…' : 'Send Verification Code'}
+          </button>
+        </div>
+      )}
+
+      {step === 'otp' && (
+        <div className="space-y-4">
+          <div className="text-center">
+            <p className="text-white font-semibold text-sm">Enter verification code</p>
+            <p className="text-slate-500 text-xs mt-1">
+              Sent to {country.flag} {country.code} {phone}
+            </p>
+          </div>
+
+          <input
+            type="text" inputMode="numeric" maxLength={6}
+            value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
+            onKeyDown={e => e.key === 'Enter' && verifyOTP()}
+            placeholder="000000" autoFocus
+            className="w-full px-4 py-4 text-2xl font-mono text-center tracking-[14px]
+              bg-game-surface border border-game-border rounded-xl text-white
+              placeholder-slate-700 outline-none focus:border-purple-500/60 transition-colors"/>
 
           {error && <p className="text-red-400 text-xs text-center">{error}</p>}
 
-          <button onClick={verifyOTP} disabled={loading || code.length !== 6}
-            className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl
-              text-sm font-semibold bg-purple-600 hover:bg-purple-500 text-white
-              disabled:opacity-40 transition-all">
-            {loading ? <Loader className="w-4 h-4 animate-spin"/> : <ArrowRight className="w-4 h-4"/>}
+          <button onClick={verifyOTP} disabled={loading || otp.length !== 6}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+              text-sm font-semibold text-white disabled:opacity-40 transition-all"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#1d4ed8)' }}>
+            {loading ? <Loader className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>}
             {loading ? 'Verifying…' : 'Verify & Sign In'}
           </button>
 
-          <div className="flex items-center justify-center gap-2">
-            <button onClick={sendOTP} disabled={loading || resendCd > 0}
-              className="flex items-center gap-1.5 text-xs text-slate-600
-                hover:text-purple-400 disabled:opacity-40 transition-colors">
-              <RefreshCw className="w-3 h-3"/>
-              {resendCd > 0 ? `Resend in ${resendCd}s` : 'Resend code'}
-            </button>
-          </div>
-        </>
+          <button onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+            className="w-full text-xs text-slate-600 hover:text-slate-400 transition-colors text-center">
+            Wrong number? Go back
+          </button>
+        </div>
       )}
     </div>
   );
@@ -162,9 +497,9 @@ function OTPLogin({ onBack }) {
 // ── Main LoginPage ─────────────────────────────────────────────
 export default function LoginPage() {
   const { loginWithGoogle } = useAuth();
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [showOTP,       setShowOTP]       = useState(false);
-  const [googleError,   setGoogleError]   = useState('');
+  const [view,         setView]         = useState('main'); // main | email | phone
+  const [googleLoading,setGoogleLoading]= useState(false);
+  const [googleError,  setGoogleError]  = useState('');
 
   async function handleGoogle() {
     setGoogleLoading(true); setGoogleError('');
@@ -175,36 +510,32 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(124,58,237,0.15) 0%, #0f0e17 60%)' }}>
+      style={{ background: 'radial-gradient(ellipse at 50% 0%,rgba(124,58,237,0.15) 0%,#0f0e17 60%)' }}>
 
-      {/* Background stars */}
+      {/* Stars */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {[...Array(40)].map((_,i) => (
           <div key={i} className="absolute rounded-full bg-white"
             style={{ width:i%7===0?2:1, height:i%7===0?2:1,
               left:`${(i*137)%100}%`, top:`${(i*71)%100}%`,
-              opacity:0.1+(i%4)*0.1 }}/>
+              opacity:0.08+(i%4)*0.08 }}/>
         ))}
       </div>
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40
-              flex items-center justify-center">
-              <span className="text-xl">🎮</span>
-            </div>
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4
+            bg-purple-600/30 border border-purple-500/40">
+            <span className="text-2xl">🎮</span>
           </div>
           <h1 className="pixel text-lg text-white mb-1">DSA Quest</h1>
           <p className="text-slate-500 text-sm">Level up your coding skills</p>
         </div>
 
         {/* Card */}
-        <div className="game-card p-6">
-          {showOTP ? (
-            <OTPLogin onBack={() => setShowOTP(false)}/>
-          ) : (
+        <div className="game-card p-6" style={{ minHeight: 280 }}>
+          {view === 'main' && (
             <div className="space-y-4">
               <div className="text-center mb-2">
                 <h2 className="text-white font-semibold text-base mb-1">Welcome back</h2>
@@ -222,21 +553,36 @@ export default function LoginPage() {
                 <div className="flex-1 h-px bg-game-border"/>
               </div>
 
-              {/* Email OTP */}
-              <button onClick={() => setShowOTP(true)}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl
-                  text-sm font-medium bg-game-surface border border-game-border
-                  text-slate-300 hover:text-white hover:border-purple-500/50 transition-all">
+              {/* Email */}
+              <button onClick={() => setView('email')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl
+                  bg-game-surface border border-game-border text-slate-300
+                  hover:border-purple-500/50 hover:text-white transition-all group">
                 <Mail className="w-4 h-4 text-purple-400"/>
-                Continue with Email
+                <span className="text-sm flex-1 text-left">Email & Password</span>
+                <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-purple-400
+                  group-hover:translate-x-0.5 transition-all"/>
               </button>
 
-              <p className="text-slate-700 text-xs text-center leading-relaxed">
-                By signing in you agree to our terms of service.
-                No spam, ever.
+              {/* Phone */}
+              <button onClick={() => setView('phone')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl
+                  bg-game-surface border border-game-border text-slate-300
+                  hover:border-blue-500/50 hover:text-white transition-all group">
+                <Phone className="w-4 h-4 text-blue-400"/>
+                <span className="text-sm flex-1 text-left">Phone Number</span>
+                <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400
+                  group-hover:translate-x-0.5 transition-all"/>
+              </button>
+
+              <p className="text-slate-700 text-xs text-center leading-relaxed pt-1">
+                By signing in you agree to our terms. No spam, ever.
               </p>
             </div>
           )}
+
+          {view === 'email' && <EmailPasswordFlow onBack={() => setView('main')}/>}
+          {view === 'phone' && <PhoneFlow       onBack={() => setView('main')}/>}
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 // frontend/src/components/Profile/ProfilePage.jsx
 import { useState, useEffect, useRef } from 'react';
 import { Camera, Save, Loader, CheckCircle, AlertCircle,
-         MessageSquare, ArrowUp, Eye, BookOpen, Trophy, Star } from 'lucide-react';
+         MessageSquare, ArrowUp, Eye, BookOpen, Trophy, Star, Phone, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useApp }  from '../../context/AppContext.jsx';
 import { getUserProfile, createOrUpdateProfile, isUsernameTaken, getUserPosts } from '../../utils/communityService.js';
@@ -182,6 +182,32 @@ export default function ProfilePage() {
       {/* Edit Profile tab */}
       {tab === 'profile' && (
         <div className="game-card p-5 space-y-4">
+          {/* Display name for phone users */}
+          {user.phoneNumber && (
+            <div>
+              <label className="text-xs text-slate-500 mb-1.5 block">Display Name</label>
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-game-surface border border-game-border rounded-xl">
+                <input value={profile?.displayName || ''}
+                  onChange={e => setProfile(p => ({ ...p, displayName: e.target.value }))}
+                  placeholder="Your name"
+                  className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-700"/>
+              </div>
+            </div>
+          )}
+
+          {/* Phone number display */}
+          {user.phoneNumber && (
+            <div>
+              <label className="text-xs text-slate-500 mb-1.5 block">Phone Number</label>
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-game-surface border border-game-border rounded-xl opacity-60">
+                <Phone className="w-4 h-4 text-slate-600"/>
+                <span className="text-sm text-slate-400">{user.phoneNumber}</span>
+                <Shield className="w-3.5 h-3.5 text-green-500 ml-auto"/>
+              </div>
+              <p className="text-xs text-slate-700 mt-1">Verified via SMS</p>
+            </div>
+          )}
+
           <div>
             <label className="text-xs text-slate-500 mb-1.5 block">Username</label>
             <div className="flex items-center gap-2 px-3 py-2.5 bg-game-surface border border-game-border rounded-xl">

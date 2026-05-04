@@ -36,10 +36,14 @@ export function AuthProvider({ children }) {
       const snap = await getDoc(ref);
 
       if (!snap.exists()) {
+        // Phone users have no email/displayName initially
+        const isPhoneUser = !firebaseUser.email && !!firebaseUser.phoneNumber;
         const profile = {
-          displayName: firebaseUser.displayName || '',
+          displayName: firebaseUser.displayName || (isPhoneUser ? 'User' : ''),
           email:       firebaseUser.email || '',
+          phoneNumber: firebaseUser.phoneNumber || '',
           photoURL:    firebaseUser.photoURL || '',
+          provider:    isPhoneUser ? 'phone' : firebaseUser.providerData?.[0]?.providerId || 'email',
           isAdmin:     false,
           joinedAt:    serverTimestamp(),
         };
@@ -48,7 +52,11 @@ export function AuthProvider({ children }) {
         setIsAdmin(false);
       } else {
         const data = snap.data();
-        setUserProfile(data);
+        // Update phone number if user linked it later
+        if (firebaseUser.phoneNumber && !data.phoneNumber) {
+          await setDoc(ref, { phoneNumber: firebaseUser.phoneNumber }, { merge: true });
+        }
+        setUserProfile({ ...data, phoneNumber: firebaseUser.phoneNumber || data.phoneNumber || '' });
         setIsAdmin(!!data.isAdmin);
       }
     } catch (err) {
