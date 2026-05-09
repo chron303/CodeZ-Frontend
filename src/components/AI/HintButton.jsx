@@ -1,28 +1,27 @@
 // frontend/src/components/AI/HintButton.jsx
-// "Get a Hint" button shown in the editor toolbar
-// Sends problem + current code to Gemini → shows nudge without spoiling
-
 import { API_URL } from '../../utils/config.js';
 import { useState } from 'react';
 import AIGate from './AIGate.jsx';
-import { Lightbulb, X, Loader, ChevronDown, ChevronUp } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { Lightbulb, X, Loader } from 'lucide-react';
 
 function HintButtonInner({ problem, code, language }) {
+  const { user } = useAuth();
   const [open,    setOpen]    = useState(false);
   const [hint,    setHint]    = useState('');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
-  const [used,    setUsed]    = useState(0); // hint count
+  const [used,    setUsed]    = useState(0);
 
   async function fetchHint() {
-    if (!problem) return;
+    if (!problem || !user) return;
     setLoading(true);
     setError('');
     try {
       const res = await fetch((API_URL || '') + '/api/ai/hint', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problem, code, language }),
+        body: JSON.stringify({ uid: user.uid, problem, code, language }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to get hint');
@@ -99,7 +98,7 @@ function HintButtonInner({ problem, code, language }) {
 
 export default function HintButton(props) {
   function goToPremium() {
-    window.dispatchEvent(new CustomEvent('navigate', { detail: 'premium' }));
+    window.dispatchEvent(new CustomEvent('open-premium'));
   }
   return (
     <AIGate compact onUpgrade={goToPremium}>

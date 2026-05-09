@@ -1,32 +1,33 @@
 // frontend/src/components/AI/CodeReview.jsx
-// AI code review panel shown after all tests pass
-// Gemini reviews time/space complexity + gives improvement tips
-
 import { API_URL } from '../../utils/config.js';
 import { useState } from 'react';
 import AIGate from './AIGate.jsx';
 import { useAI }      from './AIToggle.jsx';
+import { useAuth }    from '../../context/AuthContext.jsx';
 import { usePremium } from '../../context/PremiumContext.jsx';
 import { Star, Loader, ChevronDown, ChevronUp, TrendingUp, AlertCircle, Check } from 'lucide-react';
 
 export default function CodeReview({ problem, code, language, passed, total }) {
-  const aiEnabled = useAI();
+  const aiEnabled   = useAI();
   const { premium } = usePremium();
-  if (!aiEnabled || !premium) return null; // hidden when AI off or not premium
+  const { user }    = useAuth();
+
   const [review,  setReview]  = useState(null);
   const [loading, setLoading] = useState(false);
   const [open,    setOpen]    = useState(false);
   const [error,   setError]   = useState('');
 
+  if (!aiEnabled || !premium) return null;
+
   async function fetchReview() {
-    if (loading || !code || !problem) return;
+    if (loading || !code || !problem || !user) return;
     setLoading(true);
     setError('');
     try {
       const res = await fetch((API_URL || '') + '/api/ai/review', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problem, code, language, passed, total }),
+        body: JSON.stringify({ uid: user.uid, problem, code, language, passed, total }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Review failed');
@@ -42,7 +43,6 @@ export default function CodeReview({ problem, code, language, passed, total }) {
 
   return (
     <div className="border-t border-game-border">
-      {/* Toggle button */}
       <button
         onClick={() => open ? setOpen(false) : review ? setOpen(true) : fetchReview()}
         disabled={loading}
@@ -60,7 +60,7 @@ export default function CodeReview({ problem, code, language, passed, total }) {
               : 'Get AI Code Review'}
           </span>
           {review && !loading && (
-            <span className="text-xs text-slate-600">Free • Gemini</span>
+            <span className="text-xs text-slate-600">Gemini</span>
           )}
         </div>
         {review && !loading && (
@@ -69,7 +69,6 @@ export default function CodeReview({ problem, code, language, passed, total }) {
         )}
       </button>
 
-      {/* Review content */}
       {open && (review || error) && (
         <div className="px-4 pb-4 space-y-3">
           {error && (
@@ -81,28 +80,20 @@ export default function CodeReview({ problem, code, language, passed, total }) {
 
           {review && (
             <>
-              {/* Complexity badges */}
               <div className="flex gap-2">
                 <div className="flex-1 bg-game-surface border border-game-border rounded-xl p-3">
                   <p className="text-xs text-slate-600 mb-1">Time</p>
-                  <p className="text-sm font-mono font-bold text-green-400">
-                    {review.timeComplexity}
-                  </p>
+                  <p className="text-sm font-mono font-bold text-green-400">{review.timeComplexity}</p>
                 </div>
                 <div className="flex-1 bg-game-surface border border-game-border rounded-xl p-3">
                   <p className="text-xs text-slate-600 mb-1">Space</p>
-                  <p className="text-sm font-mono font-bold text-blue-400">
-                    {review.spaceComplexity}
-                  </p>
+                  <p className="text-sm font-mono font-bold text-blue-400">{review.spaceComplexity}</p>
                 </div>
               </div>
 
-              {/* Strengths */}
               {review.strengths?.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-green-400 mb-1.5 uppercase tracking-wide">
-                    Strengths
-                  </p>
+                  <p className="text-xs font-semibold text-green-400 mb-1.5 uppercase tracking-wide">Strengths</p>
                   <div className="space-y-1">
                     {review.strengths.map((s, i) => (
                       <div key={i} className="flex items-start gap-2">
@@ -114,12 +105,9 @@ export default function CodeReview({ problem, code, language, passed, total }) {
                 </div>
               )}
 
-              {/* Improvements */}
               {review.improvements?.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-yellow-400 mb-1.5 uppercase tracking-wide">
-                    Can improve
-                  </p>
+                  <p className="text-xs font-semibold text-yellow-400 mb-1.5 uppercase tracking-wide">Can improve</p>
                   <div className="space-y-1">
                     {review.improvements.map((s, i) => (
                       <div key={i} className="flex items-start gap-2">
@@ -131,12 +119,9 @@ export default function CodeReview({ problem, code, language, passed, total }) {
                 </div>
               )}
 
-              {/* Tip */}
               {review.tip && (
                 <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                  <p className="text-xs text-purple-300 leading-relaxed">
-                    💡 {review.tip}
-                  </p>
+                  <p className="text-xs text-purple-300 leading-relaxed">💡 {review.tip}</p>
                 </div>
               )}
             </>
