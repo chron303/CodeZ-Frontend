@@ -1,15 +1,15 @@
 // frontend/src/components/Game/GameWorld.jsx
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { ChevronDown, CheckCircle, Circle, Code2, X } from 'lucide-react';
+import { ChevronDown, CheckCircle, Circle, Code2, X, ChevronUp } from 'lucide-react';
 import { useTheme } from '../../themes/ThemeContext.jsx';
 import { useApp }   from '../../context/AppContext.jsx';
 
 // ── Canvas constants ───────────────────────────────────────────
-const CANVAS_H    = 300;
-const NODE_R      = 18;
+const CANVAS_H     = 300;
+const NODE_R       = 18;
 const NODE_SPACING = 110;
 const PATH_Y_BASE  = 170;
-const CHAR_H      = 24;
+const CHAR_H       = 24;
 
 // ── Colours ────────────────────────────────────────────────────
 const DIFF_FILL = { Easy: '#10b981', Medium: '#f59e0b', Hard: '#ef4444' };
@@ -53,10 +53,8 @@ const MARIO_SPRITE = [
 ];
 const MARIO_PAL = { 0:null, 1:'#e74c3c', 2:'#f4c89e', 3:'#8b5e3c', 4:'#0070e8' };
 
-// ── Draw character ─────────────────────────────────────────────
 function drawChar(ctx, cx, cy, frame, walking, mario = false) {
   const bobY = walking ? 0 : Math.sin(frame * 0.05) * 3;
-
   if (mario) {
     const S = 2;
     const sprite = MARIO_SPRITE;
@@ -75,7 +73,6 @@ function drawChar(ctx, cx, cy, frame, walking, mario = false) {
     });
     return;
   }
-
   const sx = cx - (SPRITE[0].length * CELL) / 2;
   const sy = cy - SPRITE.length * CELL + bobY;
   SPRITE.forEach((row, ry) => {
@@ -91,7 +88,6 @@ function drawChar(ctx, cx, cy, frame, walking, mario = false) {
   });
 }
 
-// ── Draw node ──────────────────────────────────────────────────
 function drawNode(ctx, x, y, problem, isCurrent, frame, mario = false) {
   const solved = problem.solved;
   const diff   = problem.difficulty;
@@ -101,75 +97,49 @@ function drawNode(ctx, x, y, problem, isCurrent, frame, mario = false) {
     const bx = x - S, by = y - S;
     const bw = S * 2, bh = S * 2;
     const bounceY = isCurrent ? Math.abs(Math.sin(frame * 0.1)) * -6 : 0;
-
     if (solved) {
-      ctx.fillStyle = '#5c3310';
-      ctx.fillRect(bx, by + bounceY, bw, bh);
-      ctx.fillStyle = '#7a4a20';
-      ctx.fillRect(bx+2, by+2+bounceY, bw-4, bh-4);
-      ctx.fillStyle = '#fbbf24';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#5c3310'; ctx.fillRect(bx, by + bounceY, bw, bh);
+      ctx.fillStyle = '#7a4a20'; ctx.fillRect(bx+2, by+2+bounceY, bw-4, bh-4);
+      ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('✓', x, y + bounceY);
     } else if (isCurrent) {
       const flash = Math.sin(frame * 0.15) > 0;
-      ctx.fillStyle = flash ? '#fbbf24' : '#f59e0b';
-      ctx.fillRect(bx, by+bounceY, bw, bh);
+      ctx.fillStyle = flash ? '#fbbf24' : '#f59e0b'; ctx.fillRect(bx, by+bounceY, bw, bh);
       ctx.fillStyle = '#92400e';
-      ctx.fillRect(bx, by+bounceY, bw, 3);
-      ctx.fillRect(bx, by+bounceY, 3, bh);
-      ctx.fillRect(bx+bw-3, by+bounceY, 3, bh);
-      ctx.fillRect(bx, by+bh-3+bounceY, bw, 3);
-      ctx.fillStyle = '#1a0a00';
-      ctx.font = 'bold 14px "Press Start 2P", monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.fillRect(bx, by+bounceY, bw, 3); ctx.fillRect(bx, by+bounceY, 3, bh);
+      ctx.fillRect(bx+bw-3, by+bounceY, 3, bh); ctx.fillRect(bx, by+bh-3+bounceY, bw, 3);
+      ctx.fillStyle = '#1a0a00'; ctx.font = 'bold 14px "Press Start 2P", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('?', x, y + bounceY);
     } else {
       const brickColor = diff==='Hard' ? '#dc2626' : diff==='Medium' ? '#d97706' : '#c8a96e';
-      ctx.fillStyle = brickColor;
-      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = brickColor; ctx.fillRect(bx, by, bw, bh);
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillRect(bx, by+bh/2, bw, 2);
-      ctx.fillRect(bx+bw/2, by, 2, bh/2);
-      ctx.fillStyle = '#fff8';
-      ctx.font = 'bold 10px "Press Start 2P", monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.fillRect(bx, by+bh/2, bw, 2); ctx.fillRect(bx+bw/2, by, 2, bh/2);
+      ctx.fillStyle = '#fff8'; ctx.font = 'bold 10px "Press Start 2P", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(diff[0], x, y);
     }
-
     const label = problem.title.length > 12 ? problem.title.slice(0,11)+'…' : problem.title;
     ctx.font = '7px "Press Start 2P", monospace';
-    ctx.fillStyle = '#1a0a00';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1a0a00'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, x, y + S + 12);
     return;
   }
 
-  // ── Dark theme nodes ───────────────────────────────────────
   const fill = solved ? (DIFF_FILL[diff]||'#10b981') : isCurrent ? '#7c3aed' : '#2d2a45';
   const glow = solved ? (DIFF_GLOW[diff]||DIFF_GLOW.Easy) : isCurrent ? 'rgba(124,58,237,0.5)' : null;
-
   if (glow) {
     const pulse = isCurrent ? 1 + Math.sin(frame * 0.08) * 0.25 : 1;
-    ctx.beginPath();
-    ctx.arc(x, y, NODE_R * 1.6 * pulse, 0, Math.PI * 2);
-    ctx.fillStyle = glow;
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, NODE_R * 1.6 * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = glow; ctx.fill();
   }
-  ctx.beginPath();
-  ctx.arc(x, y, NODE_R, 0, Math.PI * 2);
-  ctx.fillStyle = fill;
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, NODE_R, 0, Math.PI * 2);
+  ctx.fillStyle = fill; ctx.fill();
   ctx.strokeStyle = solved ? '#ffffff88' : isCurrent ? '#a78bfa' : '#3d3a55';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 2; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (solved) {
     ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.fillText('✓', x, y);
   } else if (isCurrent) {
@@ -220,7 +190,7 @@ function TopicDropdown({ topics, activeTopic, onSelect }) {
   );
 }
 
-// ── Problem Sidebar ────────────────────────────────────────────
+// ── Problem Sidebar (desktop) ──────────────────────────────────
 function ProblemSidebar({ topic, currentProblemId, onNavigate, onPractice, onClose }) {
   if (!topic) return null;
   const byDiff = {
@@ -283,12 +253,67 @@ function ProblemSidebar({ topic, currentProblemId, onNavigate, onPractice, onClo
   );
 }
 
+// ── Mobile Problem Sheet (bottom drawer) ───────────────────────
+function MobileProblemSheet({ topic, currentProblemId, onNavigate, onPractice, onClose }) {
+  if (!topic) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}>
+      <div className="game-card rounded-t-2xl border-t border-game-border overflow-hidden"
+        style={{ maxHeight: '60vh' }}
+        onClick={e => e.stopPropagation()}>
+        {/* Handle */}
+        <div className="flex justify-center pt-2 pb-1">
+          <div className="w-10 h-1 rounded-full bg-slate-600"/>
+        </div>
+        <div className="flex items-center justify-between px-4 py-2 border-b border-game-border">
+          <div>
+            <p className="text-white text-sm font-semibold">{topic.topic}</p>
+            <p className="text-slate-500 text-xs">{topic.solved}/{topic.total} solved · {topic.percentage}%</p>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 p-1">
+            <X className="w-4 h-4"/>
+          </button>
+        </div>
+        <div className="overflow-y-auto p-3 space-y-1" style={{ maxHeight: 'calc(60vh - 80px)' }}>
+          {topic.problems.map(p => (
+            <div key={p.id}
+              onClick={() => { onNavigate(p); onClose(); }}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer transition-colors
+                ${p.id===currentProblemId ? 'bg-purple-500/20 border border-purple-500/30' : 'hover:bg-game-surface'}
+                ${p.solved ? 'opacity-60' : ''}`}>
+              {p.solved
+                ? <CheckCircle className="w-4 h-4 text-green-400 shrink-0"/>
+                : <Circle      className="w-4 h-4 text-slate-600 shrink-0"/>}
+              <span className={`flex-1 truncate ${p.solved ? 'line-through text-slate-500' : 'text-white'}`}>
+                {p.title}
+              </span>
+              <span className={`text-xs shrink-0 ${
+                p.difficulty==='Easy'  ? 'text-green-400' :
+                p.difficulty==='Medium'? 'text-yellow-400' : 'text-red-400'
+              }`}>{p.difficulty[0]}</span>
+              {!p.solved && (
+                <button onClick={e => { e.stopPropagation(); onPractice(p); onClose(); }}
+                  className="shrink-0 px-2 py-1 rounded-lg bg-purple-600/30 border border-purple-500/40
+                    text-purple-300 text-xs">
+                  Go
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main ───────────────────────────────────────────────────────
 export default function GameWorld({ onOpenProblem }) {
   const { topics }  = useApp();
   const { isMario } = useTheme();
 
   const canvasRef       = useRef(null);
+  const containerRef    = useRef(null);
   const frameRef        = useRef(0);
   const rafRef          = useRef(null);
   const scrollRef       = useRef(0);
@@ -300,6 +325,23 @@ export default function GameWorld({ onOpenProblem }) {
   const [isWalking,   setIsWalking]   = useState(false);
   const [filterTopic, setFilterTopic] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [isMobile,    setIsMobile]    = useState(false);
+  // internal canvas draw width — scaled down on mobile
+  const [canvasW,     setCanvasW]     = useState(900);
+
+  // ── Detect mobile + set canvas width via ResizeObserver ──────
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0].contentRect.width;
+      setIsMobile(w < 640);
+      // Use container width as internal canvas draw width (min 400)
+      setCanvasW(Math.max(400, Math.round(w)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const allProblems = useMemo(() => {
     if (!filterTopic) return topics.flatMap(t => t.problems);
@@ -350,19 +392,34 @@ export default function GameWorld({ onOpenProblem }) {
     setCurrentIdx(idx);
   }, [filterTopic, topics.length]);
 
-  const handleClick = useCallback((e) => {
+  // ── Click / tap handler ───────────────────────────────────────
+  // Works for both mouse and touch
+  const handleCanvasInteraction = useCallback((clientX, clientY) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect  = canvas.getBoundingClientRect();
+    const rect   = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
-    const mx = (e.clientX - rect.left) * scaleX + scrollRef.current;
-    const my = (e.clientY - rect.top)  * scaleX;
+    const mx = (clientX - rect.left) * scaleX + scrollRef.current;
+    const my = (clientY - rect.top)  * scaleX;
+    // Larger hit area on mobile (NODE_R + 16 instead of +8)
+    const hitR = isMobile ? NODE_R + 16 : NODE_R + 8;
     for (const node of nodes) {
       const dx = mx - node.x, dy = my - node.y;
-      if (Math.sqrt(dx*dx + dy*dy) < NODE_R + 8) { walkTo(node.index); return; }
+      if (Math.sqrt(dx*dx + dy*dy) < hitR) { walkTo(node.index); return; }
     }
-  }, [nodes, walkTo]);
+  }, [nodes, walkTo, isMobile]);
 
+  const handleClick = useCallback((e) => {
+    handleCanvasInteraction(e.clientX, e.clientY);
+  }, [handleCanvasInteraction]);
+
+  const handleTouch = useCallback((e) => {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+  }, [handleCanvasInteraction]);
+
+  // ── Draw loop ─────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || nodes.length === 0) return;
@@ -379,47 +436,30 @@ export default function GameWorld({ onOpenProblem }) {
       const camX = Math.round(scrollRef.current);
 
       if (isMario) {
-        // Sky
-        ctx.fillStyle = '#5c94fc';
-        ctx.fillRect(0, 0, W, H);
-
-        // Parallax clouds
+        ctx.fillStyle = '#5c94fc'; ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = 'white';
         [60,200,380,560,720,900,1100].forEach((cx, i) => {
           const ox = ((cx - camX * 0.3 + W * 2) % (W + 300)) - 100;
           const cy = 30 + (i % 3) * 20;
-          ctx.fillRect(ox, cy+8, 32, 8);
-          ctx.fillRect(ox+8, cy, 24, 8);
-          ctx.fillRect(ox+8, cy+16, 24, 8);
-          ctx.fillRect(ox+4, cy+4, 8, 16);
+          ctx.fillRect(ox, cy+8, 32, 8); ctx.fillRect(ox+8, cy, 24, 8);
+          ctx.fillRect(ox+8, cy+16, 24, 8); ctx.fillRect(ox+4, cy+4, 8, 16);
           ctx.fillRect(ox+28, cy+4, 8, 16);
         });
-
-        // Ground bricks
         const groundY = H - 32;
         for (let bx = (-camX % 32); bx < W + 32; bx += 32) {
-          ctx.fillStyle = '#c8a96e';
-          ctx.fillRect(bx, groundY, 31, 31);
+          ctx.fillStyle = '#c8a96e'; ctx.fillRect(bx, groundY, 31, 31);
           ctx.fillStyle = '#8b5e3c';
-          ctx.fillRect(bx, groundY, 31, 2);
-          ctx.fillRect(bx, groundY, 2, 31);
-          ctx.fillRect(bx+29, groundY, 2, 31);
-          ctx.fillRect(bx+16, groundY+2, 1, 27);
+          ctx.fillRect(bx, groundY, 31, 2); ctx.fillRect(bx, groundY, 2, 31);
+          ctx.fillRect(bx+29, groundY, 2, 31); ctx.fillRect(bx+16, groundY+2, 1, 27);
           ctx.fillRect(bx, groundY+16, 31, 1);
         }
-        // Green grass top
-        ctx.fillStyle = '#92c849';
-        ctx.fillRect(0, groundY - 8, W, 8);
-        ctx.fillStyle = '#5a9e2a';
-        ctx.fillRect(0, groundY - 4, W, 2);
-
+        ctx.fillStyle = '#92c849'; ctx.fillRect(0, groundY - 8, W, 8);
+        ctx.fillStyle = '#5a9e2a'; ctx.fillRect(0, groundY - 4, W, 2);
       } else {
-        // Dark space background zones
         const topicList = filterTopic
           ? topics.filter(t => t.topic === filterTopic) : topics;
         const probsPerTopic = filterTopic
           ? allProblems.length : Math.ceil(allProblems.length / Math.max(topics.length, 1));
-
         topicList.forEach((t, ti) => {
           const zx = ti * probsPerTopic * NODE_SPACING - camX;
           const zw = probsPerTopic * NODE_SPACING + NODE_SPACING;
@@ -430,20 +470,14 @@ export default function GameWorld({ onOpenProblem }) {
           ctx.textAlign = 'left';
           ctx.fillText(t.topic.toUpperCase(), zx + 12, 18);
         });
-
-        // Stars parallax
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         for (let i = 0; i < 50; i++) {
           const sx = ((i * 137 + camX * 0.08) % (W + 20)) - 10;
           const sy = (i * 61) % (H * 0.45);
           ctx.fillRect(sx, sy, i%4===0?2:1, i%4===0?2:1);
         }
-
-        // Ground
-        ctx.fillStyle = '#13112a';
-        ctx.fillRect(0, H - 28, W, 28);
-        ctx.fillStyle = '#1a1830';
-        ctx.fillRect(0, H - 30, W, 4);
+        ctx.fillStyle = '#13112a'; ctx.fillRect(0, H - 28, W, 28);
+        ctx.fillStyle = '#1a1830'; ctx.fillRect(0, H - 30, W, 4);
       }
 
       // Path
@@ -456,11 +490,8 @@ export default function GameWorld({ onOpenProblem }) {
         }
         ctx.lineTo(nodes[nodes.length-1].x - camX, nodes[nodes.length-1].y);
         ctx.strokeStyle = isMario ? '#8b5e3c' : '#2d2a45';
-        ctx.lineWidth = 6;
-        ctx.lineCap = 'round';
-        ctx.stroke();
+        ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.stroke();
 
-        // Solved portion
         const solvedEnd = allProblems.findIndex(p => !p.solved);
         const endIdx    = solvedEnd === -1 ? nodes.length - 1 : solvedEnd - 1;
         if (endIdx >= 1) {
@@ -471,18 +502,14 @@ export default function GameWorld({ onOpenProblem }) {
             ctx.quadraticCurveTo(nodes[i-1].x-camX, nodes[i-1].y, cpx, (nodes[i-1].y+nodes[i].y)/2);
           }
           ctx.lineTo(nodes[endIdx].x - camX, nodes[endIdx].y);
-          ctx.strokeStyle = '#10b981';
-          ctx.lineWidth = 3;
-          ctx.stroke();
+          ctx.strokeStyle = '#10b981'; ctx.lineWidth = 3; ctx.stroke();
         }
       }
 
-      // Nodes
       nodes.forEach(({ x, y, problem, index }) => {
         drawNode(ctx, x - camX, y, problem, index === currentIdx, f, isMario);
       });
 
-      // Character
       const charNode = nodes[currentIdx];
       const charY    = charNode
         ? charNode.y - NODE_R - CHAR_H / 2 - 2
@@ -494,7 +521,7 @@ export default function GameWorld({ onOpenProblem }) {
 
     rafRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [nodes, currentIdx, isWalking, topics, filterTopic, allProblems, isMario]);
+  }, [nodes, currentIdx, isWalking, topics, filterTopic, allProblems, isMario, canvasW]);
 
   if (topics.flatMap(t => t.problems).length === 0) {
     return (
@@ -505,8 +532,9 @@ export default function GameWorld({ onOpenProblem }) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3 flex-wrap">
+    <div className="space-y-3" ref={containerRef}>
+      {/* ── Controls row ── */}
+      <div className="flex items-center gap-2 flex-wrap">
         <TopicDropdown topics={topics} activeTopic={filterTopic}
           onSelect={topic => { setFilterTopic(topic); setShowSidebar(topic !== null); }}/>
 
@@ -515,6 +543,7 @@ export default function GameWorld({ onOpenProblem }) {
             ${showSidebar
               ? 'bg-purple-600/20 border border-purple-500/30 text-purple-400'
               : 'bg-game-surface border border-game-border text-slate-500 hover:text-slate-300'}`}>
+          {isMobile ? (showSidebar ? <X className="w-3.5 h-3.5"/> : <ChevronUp className="w-3.5 h-3.5"/>) : null}
           Problems
           {activeTopic && (
             <span className="bg-purple-500/30 text-purple-300 px-1.5 rounded-full text-xs">
@@ -523,7 +552,7 @@ export default function GameWorld({ onOpenProblem }) {
           )}
         </button>
 
-        <div className="ml-auto flex items-center gap-3 text-xs text-slate-600">
+        <div className="ml-auto flex items-center gap-2 text-xs text-slate-600">
           <span>{currentIdx + 1} / {nodes.length}</span>
           {currentProblem && (
             <span className={
@@ -543,36 +572,44 @@ export default function GameWorld({ onOpenProblem }) {
             flex items-center justify-center transition-all text-sm">›</button>
       </div>
 
+      {/* ── Canvas + desktop sidebar ── */}
       <div className="flex gap-3 items-start">
-        <div className="flex-1 relative">
-          <canvas ref={canvasRef} width={900} height={CANVAS_H}
+        <div className="flex-1 relative min-w-0">
+          <canvas
+            ref={canvasRef}
+            width={canvasW}
+            height={CANVAS_H}
             className="w-full rounded-xl border border-game-border cursor-pointer block"
-            style={{ background: isMario ? '#5c94fc' : '#08061a', imageRendering:'pixelated' }}
-            onClick={handleClick}/>
+            style={{ background: isMario ? '#5c94fc' : '#08061a', imageRendering:'pixelated',
+              touchAction: 'none' }}
+            onClick={handleClick}
+            onTouchStart={handleTouch}
+          />
 
           {currentProblem && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2
               flex items-center gap-2 px-3 py-1.5 text-xs
               bg-game-card/90 border border-game-border rounded-full backdrop-blur-sm whitespace-nowrap">
               <span className="text-slate-500 font-mono">{currentIdx+1}/{nodes.length}</span>
-              <span className="text-white font-medium max-w-40 truncate">{currentProblem.title}</span>
+              <span className="text-white font-medium max-w-28 md:max-w-40 truncate">{currentProblem.title}</span>
               <span className={
                 currentProblem.difficulty==='Easy'  ?'text-green-400':
                 currentProblem.difficulty==='Medium'?'text-yellow-400':'text-red-400'
-              }>{currentProblem.difficulty}</span>
+              }>{isMobile ? currentProblem.difficulty[0] : currentProblem.difficulty}</span>
               {currentProblem.solved
                 ? <span className="text-green-400">✓</span>
                 : <button onClick={() => onOpenProblem(currentProblem)}
                     className="px-2 py-0.5 rounded-md bg-purple-600/30 border border-purple-500/40
                       text-purple-300 hover:bg-purple-600/50 transition-colors">
-                    Practice
+                    {isMobile ? '▶' : 'Practice'}
                   </button>
               }
             </div>
           )}
         </div>
 
-        {showSidebar && activeTopic && (
+        {/* Desktop sidebar — hidden on mobile */}
+        {showSidebar && activeTopic && !isMobile && (
           <ProblemSidebar
             topic={activeTopic}
             currentProblemId={currentProblem?.id}
@@ -582,6 +619,17 @@ export default function GameWorld({ onOpenProblem }) {
           />
         )}
       </div>
+
+      {/* Mobile bottom sheet sidebar */}
+      {showSidebar && activeTopic && isMobile && (
+        <MobileProblemSheet
+          topic={activeTopic}
+          currentProblemId={currentProblem?.id}
+          onNavigate={walkToProblem}
+          onPractice={p => onOpenProblem(p)}
+          onClose={() => setShowSidebar(false)}
+        />
+      )}
     </div>
   );
 }

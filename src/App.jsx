@@ -22,6 +22,7 @@ import AIToggle       from './components/AI/AIToggle.jsx';
 import ThemeToggle    from './components/Mario/ThemeToggle.jsx';
 import MarioBackground from './components/Mario/MarioBackground.jsx';
 import ReviewPopup     from './components/Review/ReviewPopup.jsx';
+import NotFoundPage    from './components/NotFound/NotFoundPage.jsx';
 import { uploadFile } from './utils/api.js';
 import './index.css';
 
@@ -46,8 +47,10 @@ const TAB_URLS = {
   premium:   '/premium',
 };
 
+const KNOWN_PATHS = new Set(Object.keys(TAB_ROUTES));
+
 function getTabFromPath(path) {
-  return TAB_ROUTES[path] || TAB_ROUTES['/'];
+  return TAB_ROUTES[path] || null; // null = 404
 }
 function getUrlFromTab(tab) {
   return TAB_URLS[tab] || '/world';
@@ -260,27 +263,27 @@ function AppInner() {
   const { isMario } = useTheme();
   const hasData = topics.length > 0;
 
-  // ── URL-based routing ────────────────────────────────────────
-  const [tab,          setTab]          = useState(() => getTabFromPath(window.location.pathname));
+  const initialTab = getTabFromPath(window.location.pathname);
+  const [tab,          setTab]          = useState(initialTab);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Sync tab → URL when tab changes programmatically
+  // null tab = unknown path = show 404
+  const is404 = tab === null;
+
   function onTabChange(newTab) {
     const url = getUrlFromTab(newTab);
     window.history.pushState({ tab: newTab }, '', url);
     setTab(newTab);
   }
 
-  // Sync URL → tab on browser back/forward
   useEffect(() => {
     function onPop(e) {
-      const newTab = e.state?.tab || getTabFromPath(window.location.pathname);
+      const newTab = e.state?.tab ?? getTabFromPath(window.location.pathname);
       setTab(newTab);
     }
     window.addEventListener('popstate', onPop);
-    // Set initial history state so back button works from first page
     window.history.replaceState(
-      { tab: getTabFromPath(window.location.pathname) },
+      { tab: initialTab },
       '',
       window.location.pathname
     );
@@ -292,7 +295,6 @@ function AppInner() {
     onTabChange('practice');
   };
 
-  // ⌘K → settings
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowSettings(s => !s); }
@@ -314,6 +316,11 @@ function AppInner() {
         <p className="text-slate-500 text-sm">Loading your problems…</p>
       </div>
     </div>
+  );
+
+  // ── 404 ──────────────────────────────────────────────────────
+  if (is404) return (
+    <NotFoundPage onGoHome={() => onTabChange('world')} />
   );
 
   return (

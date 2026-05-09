@@ -46,32 +46,23 @@ function TowerCanvas({ topic, paletteIdx, selected, animFrame, small }) {
     const actualH  = floorCnt * floorH;
     const towerTop = H - 10 - actualH;
 
-    // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(W/2, H-8, tw/2+3, 5, 0, 0, Math.PI*2);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(W/2, H-8, tw/2+3, 5, 0, 0, Math.PI*2); ctx.fill();
 
-    // Side face
     const sg = ctx.createLinearGradient(tx+tw, towerTop, tx+tw+sideW, towerTop);
     sg.addColorStop(0, pal.face); sg.addColorStop(1, 'rgba(0,0,0,0.5)');
     ctx.fillStyle = sg;
     ctx.beginPath();
-    ctx.moveTo(tx+tw, towerTop);
-    ctx.lineTo(tx+tw+sideW, towerTop-sideW*0.4);
-    ctx.lineTo(tx+tw+sideW, H-10-sideW*0.4);
-    ctx.lineTo(tx+tw, H-10);
+    ctx.moveTo(tx+tw, towerTop); ctx.lineTo(tx+tw+sideW, towerTop-sideW*0.4);
+    ctx.lineTo(tx+tw+sideW, H-10-sideW*0.4); ctx.lineTo(tx+tw, H-10);
     ctx.closePath(); ctx.fill();
 
-    // Floors
     for (let fl = 0; fl < floorCnt; fl++) {
       const fy   = towerTop + fl * floorH;
       const isLit = fl < Math.round((pct/100)*floorCnt);
       ctx.fillStyle = isLit ? pal.face : pal.wall;
       ctx.fillRect(tx, fy, tw, floorH-1);
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.fillRect(tx, fy+floorH-2, tw, 2);
-
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(tx, fy+floorH-2, tw, 2);
       const winW=small?6:9, winH=6, winY=fy+3;
       const winXs = small ? [tx+5,tx+17] : [tx+5,tx+20,tx+35];
       winXs.forEach((wx,wi) => {
@@ -87,7 +78,6 @@ function TowerCanvas({ topic, paletteIdx, selected, animFrame, small }) {
       });
     }
 
-    // Roof
     ctx.fillStyle=pal.roof; ctx.fillRect(tx, towerTop-5, tw, 5);
     ctx.fillStyle=pal.face;
     ctx.beginPath();
@@ -96,7 +86,6 @@ function TowerCanvas({ topic, paletteIdx, selected, animFrame, small }) {
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.stroke();
 
-    // 100% antenna
     if (pct===100) {
       ctx.strokeStyle=pal.window; ctx.lineWidth=2;
       ctx.shadowColor=pal.glow; ctx.shadowBlur=8;
@@ -108,7 +97,6 @@ function TowerCanvas({ topic, paletteIdx, selected, animFrame, small }) {
       ctx.shadowBlur=0;
     }
 
-    // Crane
     if (pct<100) {
       const cx=tx+tw+sideW-2, cby=towerTop-5-sideW*0.4;
       ctx.strokeStyle=pal.crane; ctx.lineWidth=2.5;
@@ -124,7 +112,6 @@ function TowerCanvas({ topic, paletteIdx, selected, animFrame, small }) {
       ctx.fillRect(cx+8+swing,cby-30+clen,8,6); ctx.strokeRect(cx+8+swing,cby-30+clen,8,6);
     }
 
-    // Selected outline
     if (selected) {
       ctx.shadowColor=pal.glow; ctx.shadowBlur=16;
       ctx.strokeStyle=pal.window; ctx.lineWidth=2;
@@ -132,7 +119,6 @@ function TowerCanvas({ topic, paletteIdx, selected, animFrame, small }) {
       ctx.shadowBlur=0;
     }
 
-    // % label
     ctx.font=`bold ${small?7:9}px "Press Start 2P",monospace`;
     ctx.textAlign='center';
     ctx.fillStyle=pct===100?pal.glow:'#64748b';
@@ -144,11 +130,11 @@ function TowerCanvas({ topic, paletteIdx, selected, animFrame, small }) {
 }
 
 // ── Difficulty pill ────────────────────────────────────────────
-function DiffPill({ diff }) {
+function DiffPill({ diff, short }) {
   const cls = diff==='Easy'  ? 'text-green-400'
             : diff==='Medium'? 'text-yellow-400'
             :                  'text-red-400';
-  return <span className={`text-xs font-medium ${cls}`}>{diff}</span>;
+  return <span className={`text-xs font-medium ${cls}`}>{short ? diff[0] : diff}</span>;
 }
 
 // ── Main ───────────────────────────────────────────────────────
@@ -156,27 +142,39 @@ export default function TopicCity({ onPractice }) {
   const { topics }  = useApp();
   const { isMario } = useTheme();
 
-  const [selectedTopic, setSelectedTopic] = useState(null); // topic name string
+  const [selectedTopic, setSelectedTopic] = useState(null);
   const [search,        setSearch]        = useState('');
   const [diffFilter,    setDiffFilter]    = useState('All');
-  const [statusFilter,  setStatusFilter]  = useState('All'); // All | Solved | Unsolved
-  const [sortBy,        setSortBy]        = useState('default'); // default | difficulty | acceptance
+  const [statusFilter,  setStatusFilter]  = useState('All');
+  const [sortBy,        setSortBy]        = useState('default');
   const [showFilter,    setShowFilter]    = useState(false);
   const [animFrame,     setAnimFrame]     = useState(0);
+  const [isMobile,      setIsMobile]      = useState(false);
+
+  const containerRef = useRef(null);
+
+  // ── Detect mobile ────────────────────────────────────────────
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      setIsMobile(entries[0].contentRect.width < 600);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setAnimFrame(f => f+1), 60);
     return () => clearInterval(id);
   }, []);
 
-  // Topic index lookup
   const topicIndexMap = useMemo(() => {
     const m = {};
     topics.forEach((t,i) => { m[t.topic] = i; });
     return m;
   }, [topics]);
 
-  // All problems flat, with topic reference
   const allProblems = useMemo(() => {
     const base = selectedTopic
       ? (topics.find(t=>t.topic===selectedTopic)?.problems || [])
@@ -184,7 +182,6 @@ export default function TopicCity({ onPractice }) {
 
     let result = base.map(p => ({ ...p, _topic: p._topic || selectedTopic }));
 
-    // Search
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(p =>
@@ -192,20 +189,14 @@ export default function TopicCity({ onPractice }) {
         (p._topic||'').toLowerCase().includes(q)
       );
     }
-
-    // Difficulty filter
     if (diffFilter !== 'All') result = result.filter(p => p.difficulty === diffFilter);
-
-    // Status filter
     if (statusFilter === 'Solved')   result = result.filter(p =>  p.solved);
     if (statusFilter === 'Unsolved') result = result.filter(p => !p.solved);
 
-    // Sort
     const DIFF_ORDER = { Easy:0, Medium:1, Hard:2 };
     if (sortBy === 'difficulty') {
       result = [...result].sort((a,b) => DIFF_ORDER[a.difficulty] - DIFF_ORDER[b.difficulty]);
     }
-
     return result;
   }, [topics, selectedTopic, search, diffFilter, statusFilter, sortBy]);
 
@@ -217,13 +208,12 @@ export default function TopicCity({ onPractice }) {
     : 'linear-gradient(180deg,#050510 0%,#0f0e2a 60%,#1a1830 100%)';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={containerRef}>
 
       {/* ── Skyline strip ── */}
       <div className="relative rounded-2xl overflow-hidden border border-game-border"
-        style={{ background: skyBg, height: 200 }}>
+        style={{ background: skyBg, height: isMobile ? 160 : 200 }}>
 
-        {/* Stars / clouds */}
         {!isMario && [...Array(25)].map((_,i) => (
           <div key={i} className="absolute rounded-full bg-white"
             style={{ width:i%5===0?2:1, height:i%5===0?2:1,
@@ -234,7 +224,6 @@ export default function TopicCity({ onPractice }) {
             style={{ left:cx, top:15+(i%3)*12, width:36, height:8 }}/>
         ))}
 
-        {/* Sun / Moon */}
         {isMario
           ? <div className="absolute top-2 right-6 w-10 h-10 rounded-full"
               style={{ background:'#ffd700', boxShadow:'0 0 20px #ffd70080' }}/>
@@ -242,19 +231,17 @@ export default function TopicCity({ onPractice }) {
               style={{ background:'#fef3c7', boxShadow:'0 0 18px #fef3c780' }}/>
         }
 
-        {/* Ground */}
         <div className="absolute bottom-0 left-0 right-0 h-6"
           style={{ background: isMario?'#92c849':'#13112a' }}/>
 
-        {/* Towers — horizontal scroll if many topics */}
-        <div className="absolute bottom-6 left-0 right-0 flex items-end justify-around px-3 gap-1
-          overflow-x-auto" style={{ height:185 }}>
+        {/* Towers — horizontal scroll */}
+        <div className="absolute bottom-6 left-0 right-0 flex items-end px-2 gap-0.5
+          overflow-x-auto" style={{ height: isMobile ? 145 : 185 }}>
           {topics.map((topic,i) => (
             <div key={topic.topic}
               className="flex flex-col items-center cursor-pointer shrink-0 group"
               onClick={() => setSelectedTopic(t => t===topic.topic ? null : topic.topic)}
               title={topic.topic + ' — ' + topic.percentage + '%'}>
-              {/* Topic label — only show if selected or hovered */}
               <div className="text-center mb-0.5 transition-opacity duration-200
                 opacity-0 group-hover:opacity-100"
                 style={{ fontSize:6, fontFamily:'"Press Start 2P",monospace',
@@ -262,9 +249,13 @@ export default function TopicCity({ onPractice }) {
                   opacity: selectedTopic===topic.topic ? 1 : undefined }}>
                 {topic.topic}
               </div>
-              <div className={`transition-transform duration-200 hover:scale-110`}
+              <div className="transition-transform duration-200 hover:scale-110"
                 style={{ filter: selectedTopic===topic.topic
-                  ? `drop-shadow(0 0 6px ${getPal(i).glow})` : 'none' }}>
+                  ? `drop-shadow(0 0 6px ${getPal(i).glow})` : 'none',
+                  // Scale towers down on mobile so more fit
+                  transform: isMobile ? 'scale(0.75)' : undefined,
+                  transformOrigin: 'bottom center',
+                }}>
                 <TowerCanvas topic={topic} paletteIdx={i}
                   selected={selectedTopic===topic.topic}
                   animFrame={animFrame} small/>
@@ -274,7 +265,7 @@ export default function TopicCity({ onPractice }) {
         </div>
       </div>
 
-      {/* ── Topic pills (like LeetCode top nav) ── */}
+      {/* ── Topic pills ── */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
         <button
           onClick={() => setSelectedTopic(null)}
@@ -283,7 +274,7 @@ export default function TopicCity({ onPractice }) {
             ${!selectedTopic
               ? 'bg-white/10 border-white/20 text-white'
               : 'border-game-border text-slate-500 hover:text-slate-300 hover:border-slate-600'}`}>
-          All Topics
+          All
           <span className="text-slate-500 font-normal">{totalAll}</span>
         </button>
         {topics.map((t,i) => (
@@ -299,7 +290,7 @@ export default function TopicCity({ onPractice }) {
               borderColor:  getPal(i).window + '80',
               color:        getPal(i).glow,
             } : {}}>
-            {t.topic}
+            {isMobile ? t.topic.split(' ')[0] : t.topic}
             <span className="font-normal opacity-60">{t.total}</span>
           </button>
         ))}
@@ -307,27 +298,26 @@ export default function TopicCity({ onPractice }) {
 
       {/* ── Search + filter bar ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Search */}
-        <div className="flex items-center gap-2 flex-1 min-w-48 bg-game-surface border
+        <div className="flex items-center gap-2 flex-1 min-w-0 bg-game-surface border
           border-game-border rounded-xl px-3 py-2">
           <Search className="w-3.5 h-3.5 text-slate-600 shrink-0"/>
           <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="Search questions"
-            className="flex-1 bg-transparent text-sm text-slate-300 outline-none placeholder-slate-700"/>
+            className="flex-1 bg-transparent text-sm text-slate-300 outline-none placeholder-slate-700 min-w-0"/>
           {search && <button onClick={()=>setSearch('')} className="text-slate-600 hover:text-slate-400">
             <X className="w-3.5 h-3.5"/>
           </button>}
         </div>
 
-        {/* Sort */}
-        <button onClick={() => setSortBy(s => s==='default'?'difficulty':'default')}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs border
-            bg-game-surface border-game-border text-slate-500 hover:text-slate-300 transition-colors">
-          <ArrowUpDown className="w-3.5 h-3.5"/>
-          {sortBy==='difficulty' ? 'By Difficulty' : 'Default'}
-        </button>
+        {!isMobile && (
+          <button onClick={() => setSortBy(s => s==='default'?'difficulty':'default')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs border
+              bg-game-surface border-game-border text-slate-500 hover:text-slate-300 transition-colors">
+            <ArrowUpDown className="w-3.5 h-3.5"/>
+            {sortBy==='difficulty' ? 'Difficulty' : 'Default'}
+          </button>
+        )}
 
-        {/* Filter */}
         <div className="relative">
           <button onClick={()=>setShowFilter(s=>!s)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs border transition-colors
@@ -335,13 +325,29 @@ export default function TopicCity({ onPractice }) {
                 ?'bg-purple-500/15 border-purple-500/40 text-purple-400'
                 :'bg-game-surface border-game-border text-slate-500 hover:text-slate-300'}`}>
             <Filter className="w-3.5 h-3.5"/>
-            Filter
+            {!isMobile && 'Filter'}
             {(diffFilter!=='All'||statusFilter!=='All') && (
               <span className="w-1.5 h-1.5 rounded-full bg-purple-400"/>
             )}
           </button>
           {showFilter && (
             <div className="absolute right-0 top-full mt-1 z-30 game-card p-3 space-y-3 w-48">
+              {isMobile && (
+                <div>
+                  <p className="text-xs text-slate-500 mb-1.5 font-medium">Sort</p>
+                  <div className="flex gap-1">
+                    {['default','difficulty'].map(s => (
+                      <button key={s} onClick={()=>setSortBy(s)}
+                        className={`px-2 py-1 rounded-lg text-xs transition-colors capitalize
+                          ${sortBy===s
+                            ?'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                            :'bg-game-surface border border-game-border text-slate-500'}`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-slate-500 mb-1.5 font-medium">Difficulty</p>
                 <div className="flex flex-wrap gap-1">
@@ -373,7 +379,7 @@ export default function TopicCity({ onPractice }) {
                   ))}
                 </div>
               </div>
-              <button onClick={()=>{setDiffFilter('All');setStatusFilter('All');setShowFilter(false);}}
+              <button onClick={()=>{setDiffFilter('All');setStatusFilter('All');setSortBy('default');setShowFilter(false);}}
                 className="w-full text-xs text-slate-700 hover:text-slate-400 text-center pt-1">
                 Clear filters
               </button>
@@ -381,8 +387,7 @@ export default function TopicCity({ onPractice }) {
           )}
         </div>
 
-        {/* Solved count */}
-        <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
+        <div className="flex items-center gap-2 text-xs text-slate-500">
           <div className="w-4 h-4 rounded-full border-2 border-slate-600 flex items-center
             justify-center relative overflow-hidden">
             <div className="absolute inset-0 bg-green-500 origin-bottom transition-all"
@@ -391,24 +396,38 @@ export default function TopicCity({ onPractice }) {
           <span className="text-white font-medium">{totalSolved}</span>
           <span>/</span>
           <span>{totalAll}</span>
-          <span>Solved</span>
+          {!isMobile && <span>Solved</span>}
         </div>
       </div>
 
       {/* ── Problem list table ── */}
       <div className="game-card overflow-hidden">
-        {/* Table header */}
-        <div className="grid gap-2 px-4 py-2.5 border-b border-game-border text-xs
-          font-medium text-slate-600 uppercase tracking-wider"
-          style={{ gridTemplateColumns: '2rem 1fr 7rem 5.5rem 4rem' }}>
-          <span/>
-          <span>Title</span>
-          <span className="text-center">Topic</span>
-          <span className="text-center">Difficulty</span>
-          <span className="text-right">Status</span>
-        </div>
 
-        {/* Rows */}
+        {/* Desktop header — hidden on mobile */}
+        {!isMobile && (
+          <div className="grid gap-2 px-4 py-2.5 border-b border-game-border text-xs
+            font-medium text-slate-600 uppercase tracking-wider"
+            style={{ gridTemplateColumns: '2rem 1fr 7rem 5.5rem 4rem' }}>
+            <span/>
+            <span>Title</span>
+            <span className="text-center">Topic</span>
+            <span className="text-center">Difficulty</span>
+            <span className="text-right">Status</span>
+          </div>
+        )}
+
+        {/* Mobile header */}
+        {isMobile && (
+          <div className="grid gap-2 px-3 py-2 border-b border-game-border text-xs
+            font-medium text-slate-600 uppercase tracking-wider"
+            style={{ gridTemplateColumns: '1.5rem 1fr 3rem 4rem' }}>
+            <span/>
+            <span>Title</span>
+            <span className="text-center">Diff</span>
+            <span className="text-right">Status</span>
+          </div>
+        )}
+
         {allProblems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-slate-500 text-sm mb-1">No problems found</p>
@@ -419,23 +438,52 @@ export default function TopicCity({ onPractice }) {
             {allProblems.map((p, idx) => {
               const topicIdx = topicIndexMap[p._topic] ?? 0;
               const pal      = getPal(topicIdx);
+
+              // ── Mobile row ──
+              if (isMobile) {
+                return (
+                  <div key={p.id || idx}
+                    className={`grid gap-2 px-3 py-3 items-center transition-colors cursor-pointer
+                      hover:bg-white/5 group ${p.solved ? 'opacity-75' : ''}`}
+                    style={{ gridTemplateColumns: '1.5rem 1fr 3rem 4rem' }}
+                    onClick={() => onPractice(p)}>
+                    <div className="flex items-center justify-center">
+                      {p.solved
+                        ? <CheckCircle className="w-3.5 h-3.5 text-green-400"/>
+                        : <span className="w-3.5 h-3.5 rounded border border-game-border block"/>
+                      }
+                    </div>
+                    <span className={`text-sm truncate font-medium
+                      ${p.solved ? 'text-slate-500 line-through' : 'text-white group-hover:text-purple-300'}
+                      transition-colors`}>
+                      {p.number ? `${p.number}. ` : ''}{p.title}
+                    </span>
+                    <div className="flex justify-center">
+                      <DiffPill diff={p.difficulty} short/>
+                    </div>
+                    <div className="text-right">
+                      {p.solved
+                        ? <span className="text-xs text-green-400">✓ Done</span>
+                        : <span className="text-xs text-purple-400 group-hover:underline">Practice</span>
+                      }
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── Desktop row ──
               return (
                 <div key={p.id || idx}
                   className={`grid gap-2 px-4 py-3 items-center transition-colors cursor-pointer
-                    hover:bg-white/5 group
-                    ${p.solved ? 'opacity-75' : ''}`}
+                    hover:bg-white/5 group ${p.solved ? 'opacity-75' : ''}`}
                   style={{ gridTemplateColumns: '2rem 1fr 7rem 5.5rem 4rem' }}
                   onClick={() => onPractice(p)}>
-
-                  {/* Status icon */}
                   <div className="flex items-center justify-center">
                     {p.solved
                       ? <CheckCircle className="w-4 h-4 text-green-400"/>
                       : <span className="w-4 h-4 rounded border border-game-border block"/>
                     }
                   </div>
-
-                  {/* Title */}
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`text-sm truncate font-medium
                       ${p.solved ? 'text-slate-500 line-through' : 'text-white group-hover:text-purple-300'}
@@ -453,8 +501,6 @@ export default function TopicCity({ onPractice }) {
                     <Code2 className="w-3 h-3 text-slate-700 shrink-0 opacity-0
                       group-hover:opacity-100 transition-opacity ml-auto"/>
                   </div>
-
-                  {/* Topic badge */}
                   <div className="flex justify-center">
                     <span className="px-2 py-0.5 rounded-full text-xs font-medium truncate max-w-full"
                       style={{
@@ -465,13 +511,9 @@ export default function TopicCity({ onPractice }) {
                       {p._topic || p.topic}
                     </span>
                   </div>
-
-                  {/* Difficulty */}
                   <div className="flex justify-center">
                     <DiffPill diff={p.difficulty}/>
                   </div>
-
-                  {/* Solved status text */}
                   <div className="text-right">
                     {p.solved
                       ? <span className="text-xs text-green-400">Solved</span>
@@ -484,7 +526,6 @@ export default function TopicCity({ onPractice }) {
           </div>
         )}
 
-        {/* Footer */}
         <div className="px-4 py-2.5 border-t border-game-border flex items-center
           justify-between text-xs text-slate-700">
           <span>Showing {allProblems.length} problem{allProblems.length!==1?'s':''}</span>
@@ -492,7 +533,7 @@ export default function TopicCity({ onPractice }) {
             <button onClick={() => {
               setSearch(''); setDiffFilter('All'); setStatusFilter('All'); setSelectedTopic(null);
             }} className="text-purple-500 hover:text-purple-400 transition-colors">
-              Clear all filters
+              Clear all
             </button>
           )}
         </div>
@@ -500,10 +541,3 @@ export default function TopicCity({ onPractice }) {
     </div>
   );
 }
-
-// function DiffPill({ diff }) {
-//   const cls = diff==='Easy'  ?'text-green-400'
-//             : diff==='Medium'?'text-yellow-400'
-//             :                  'text-red-400';
-//   return <span className={`text-sm font-medium ${cls}`}>{diff}</span>;
-// }
