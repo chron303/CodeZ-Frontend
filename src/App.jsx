@@ -23,6 +23,7 @@ import ThemeToggle    from './components/Mario/ThemeToggle.jsx';
 import MarioBackground from './components/Mario/MarioBackground.jsx';
 import ReviewPopup     from './components/Review/ReviewPopup.jsx';
 import NotFoundPage    from './components/NotFound/NotFoundPage.jsx';
+import LegalPage       from './components/Legal/LegalPage.jsx';
 import { uploadFile } from './utils/api.js';
 import './index.css';
 
@@ -46,8 +47,6 @@ const TAB_URLS = {
   profile:   '/profile',
   premium:   '/premium',
 };
-
-const KNOWN_PATHS = new Set(Object.keys(TAB_ROUTES));
 
 function getTabFromPath(path) {
   return TAB_ROUTES[path] || null; // null = 404
@@ -266,8 +265,9 @@ function AppInner() {
   const initialTab = getTabFromPath(window.location.pathname);
   const [tab,          setTab]          = useState(initialTab);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLegal,    setShowLegal]    = useState(false);
+  const [legalTab,     setLegalTab]     = useState('terms');
 
-  // null tab = unknown path = show 404
   const is404 = tab === null;
 
   function onTabChange(newTab) {
@@ -295,17 +295,25 @@ function AppInner() {
     onTabChange('practice');
   };
 
+  // Global keyboard shortcuts + custom events
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowSettings(s => !s); }
-      if (e.key === 'Escape') setShowSettings(false);
+      if (e.key === 'Escape') { setShowSettings(false); setShowLegal(false); }
     };
     const openPremium = () => onTabChange('premium');
-    window.addEventListener('keydown', handler);
-    window.addEventListener('open-premium', openPremium);
+    const openTerms   = () => { setLegalTab('terms');   setShowLegal(true); };
+    const openPrivacy = () => { setLegalTab('privacy'); setShowLegal(true); };
+
+    window.addEventListener('keydown',       handler);
+    window.addEventListener('open-premium',  openPremium);
+    window.addEventListener('open-terms',    openTerms);
+    window.addEventListener('open-privacy',  openPrivacy);
     return () => {
-      window.removeEventListener('keydown', handler);
+      window.removeEventListener('keydown',      handler);
       window.removeEventListener('open-premium', openPremium);
+      window.removeEventListener('open-terms',   openTerms);
+      window.removeEventListener('open-privacy', openPrivacy);
     };
   }, []);
 
@@ -391,7 +399,17 @@ function AppInner() {
         />
       )}
 
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsPanel onClose={() => setShowSettings(false)} />
+      )}
+
+      {showLegal && (
+        <LegalPage
+          defaultTab={legalTab}
+          onClose={() => setShowLegal(false)}
+        />
+      )}
+
       <ReviewPopup
         onPractice={handlePractice}
         onDismissAll={() => {}}
