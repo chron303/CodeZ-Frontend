@@ -1,25 +1,17 @@
 // frontend/src/components/Dashboard/Dashboard.jsx
-//
-// Phase 4 Stats page — all sections in one scrollable view:
-//   1. Overall stat cards
-//   2. Progress ring + weak topics
-//   3. Solve heatmap
-//   4. Achievements grid
-//   5. LeetCode sync
-//   6. All topics table
-//   7. Recent activity feed
 
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext.jsx';
 import { Trophy, Target, BookOpen, TrendingUp, AlertTriangle } from 'lucide-react';
-import SolveHeatmap    from '../Stats/SolveHeatmap.jsx';
+import SolveHeatmap     from '../Stats/SolveHeatmap.jsx';
 import AchievementsGrid from '../Stats/AchievementsGrid.jsx';
-import LeetCodeSync    from '../Stats/LeetCodeSync.jsx';
-import { xpProgress }  from '../../utils/progression.js';
-import StudyPlan       from '../AI/StudyPlan.jsx';
-import ReviewDashboard from '../Review/ReviewDashboard.jsx';
+import LeetCodeSync     from '../Stats/LeetCodeSync.jsx';
+import MockReportCards  from '../Mock/MockReportCards.jsx';
+import { xpProgress }   from '../../utils/progression.js';
+import StudyPlan        from '../AI/StudyPlan.jsx';
+import ReviewDashboard  from '../Review/ReviewDashboard.jsx';
+import { usePremium }   from '../../context/PremiumContext.jsx';
 
-// ── Stat card ─────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, color, sub }) {
   return (
     <div className="game-card p-4 flex items-center gap-3">
@@ -35,7 +27,6 @@ function StatCard({ icon: Icon, label, value, color, sub }) {
   );
 }
 
-// ── Progress ring ─────────────────────────────────────────────
 function ProgressRing({ pct, size = 96, stroke = 10 }) {
   const r    = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
@@ -51,7 +42,6 @@ function ProgressRing({ pct, size = 96, stroke = 10 }) {
   );
 }
 
-// ── Weak topic row ────────────────────────────────────────────
 function WeakTopicRow({ topic, rank }) {
   const pct      = topic.percentage;
   const barColor = pct < 20 ? 'bg-red-500' : pct < 50 ? 'bg-yellow-500' : 'bg-green-500';
@@ -69,7 +59,6 @@ function WeakTopicRow({ topic, rank }) {
   );
 }
 
-// ── XP card ────────────────────────────────────────────────────
 function XpCard({ progression }) {
   const { xpIntoLevel, xpNeeded, pct } = xpProgress(progression);
   return (
@@ -79,7 +68,6 @@ function XpCard({ progression }) {
         <p className="pixel text-xs text-purple-400">Progression</p>
       </div>
       <div className="flex items-center gap-4">
-        {/* Level badge */}
         <div className="w-14 h-14 rounded-xl bg-purple-600/20 border border-purple-500/30 flex flex-col items-center justify-center shrink-0">
           <span className="text-purple-300 text-xs">Lv</span>
           <span className="text-white font-bold text-xl leading-none">{progression.level}</span>
@@ -90,8 +78,7 @@ function XpCard({ progression }) {
             <span className="text-purple-400 font-mono">{xpIntoLevel}/{xpNeeded}</span>
           </div>
           <div className="h-2 bg-game-surface rounded-full overflow-hidden">
-            <div className="h-full bg-purple-500 rounded-full transition-all duration-700"
-                 style={{ width: `${pct}%` }} />
+            <div className="h-full bg-purple-500 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
           </div>
           <div className="flex justify-between text-xs mt-2">
             <span className="text-slate-600">Total XP: <span className="text-slate-400 font-mono">{progression.xp}</span></span>
@@ -105,14 +92,12 @@ function XpCard({ progression }) {
   );
 }
 
-// ── Recent activity feed ───────────────────────────────────────
 function ActivityFeed({ progression }) {
   const events = progression?.recentEvents ?? [];
   if (events.length === 0) return null;
-
   return (
     <div className="game-card p-4">
-      <p className="pixel text-xs text-slate-400 mb-3">Recent TrendingUp</p>
+      <p className="pixel text-xs text-slate-400 mb-3">Recent Activity</p>
       <div className="space-y-2 max-h-48 overflow-y-auto">
         {events.map((e, i) => (
           <div key={i} className="flex items-center gap-3 text-xs py-1.5 border-b border-game-border last:border-0">
@@ -135,7 +120,6 @@ function ActivityFeed({ progression }) {
   );
 }
 
-// ── All topics table ──────────────────────────────────────────
 function AllTopicsTable({ topics }) {
   const sorted = [...topics].sort((a, b) => b.percentage - a.percentage);
   return (
@@ -161,19 +145,14 @@ function AllTopicsTable({ topics }) {
   );
 }
 
-
-// ── Export / Reset controls ───────────────────────────────────
 function ProgressControls() {
   const { exportProgress, resetProgress, showToast } = useApp();
   const [confirmReset, setConfirmReset] = useState(false);
 
   function handleExport() { exportProgress(); }
-
   function handleReset() {
     if (!confirmReset) { setConfirmReset(true); return; }
-    resetProgress();
-    setConfirmReset(false);
-    showToast('Progress has been reset.');
+    resetProgress(); setConfirmReset(false); showToast('Progress has been reset.');
   }
 
   return (
@@ -201,6 +180,7 @@ function ProgressControls() {
 // ── Main ───────────────────────────────────────────────────────
 export default function Dashboard({ onPractice }) {
   const { topics, summary, progression } = useApp();
+  const { premium } = usePremium();
 
   if (topics.length === 0) {
     return (
@@ -212,6 +192,7 @@ export default function Dashboard({ onPractice }) {
 
   return (
     <div className="space-y-5">
+
       {/* ── Spaced Repetition Reviews ── */}
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -226,10 +207,10 @@ export default function Dashboard({ onPractice }) {
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={BookOpen}    label="Problems"  value={summary.totalProblems}     color="text-slate-300" />
-        <StatCard icon={Trophy}      label="Solved"    value={summary.totalSolved}        color="text-green-400" />
-        <StatCard icon={Target}      label="Topics"    value={summary.totalTopics}        color="text-purple-400" />
-        <StatCard icon={TrendingUp}  label="Complete"  value={`${summary.overallPct}%`}  color="text-blue-400" />
+        <StatCard icon={BookOpen}   label="Problems" value={summary.totalProblems}    color="text-slate-300" />
+        <StatCard icon={Trophy}     label="Solved"   value={summary.totalSolved}       color="text-green-400" />
+        <StatCard icon={Target}     label="Topics"   value={summary.totalTopics}       color="text-purple-400" />
+        <StatCard icon={TrendingUp} label="Complete" value={`${summary.overallPct}%`} color="text-blue-400" />
       </div>
 
       {/* ── Progress ring + Weak topics ── */}
@@ -251,9 +232,7 @@ export default function Dashboard({ onPractice }) {
             </p>
             {summary.overallPct === 100 && <p className="pixel text-xs text-yellow-400 mt-2">🏆 All done!</p>}
             {summary.overallPct < 100 && (
-              <p className="text-slate-600 text-xs mt-1">
-                {summary.totalProblems - summary.totalSolved} remaining
-              </p>
+              <p className="text-slate-600 text-xs mt-1">{summary.totalProblems - summary.totalSolved} remaining</p>
             )}
           </div>
         </div>
@@ -284,6 +263,13 @@ export default function Dashboard({ onPractice }) {
       <div className="game-card p-4">
         <AchievementsGrid />
       </div>
+
+      {/* ── Mock Interview Report Cards (premium only) ── */}
+      {premium && (
+        <div className="game-card p-4">
+          <MockReportCards />
+        </div>
+      )}
 
       {/* ── LeetCode Sync ── */}
       <LeetCodeSync />

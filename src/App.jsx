@@ -1,30 +1,31 @@
 // frontend/src/App.jsx
 import { useState, useEffect, useRef } from 'react';
 import { Map, BarChart3, Code2, Gamepad, Settings,
-         LogOut, Loader, Folder, Upload, Users, User, Crown } from 'lucide-react';
+         LogOut, Loader, Folder, Upload, Users, User, Crown, Sword } from 'lucide-react';
 import { AuthProvider, useAuth }   from './context/AuthContext.jsx';
 import { AppProvider, useApp }     from './context/AppContext.jsx';
 import { ThemeProvider, useTheme } from './themes/ThemeContext.jsx';
 import { PremiumProvider, usePremium } from './context/PremiumContext.jsx';
-import LoginPage      from './components/Auth/LoginPage.jsx';
-import AdminPanel     from './components/Admin/AdminPanel.jsx';
-import TopicCity      from './components/TopicViz/TopicCity.jsx';
-import Dashboard      from './components/Dashboard/Dashboard.jsx';
-import EditorView     from './components/Editor/EditorView.jsx';
-import GameWorld      from './components/Game/GameWorld.jsx';
-import XpBar          from './components/Game/XpBar.jsx';
-import LevelComplete  from './components/Game/LevelComplete.jsx';
-import SettingsPanel  from './components/Settings/SettingsPanel.jsx';
-import CommunityFeed  from './components/Community/CommunityFeed.jsx';
-import ProfilePage    from './components/Profile/ProfilePage.jsx';
-import PremiumPage    from './components/Premium/PremiumPage.jsx';
-import AIToggle       from './components/AI/AIToggle.jsx';
-import ThemeToggle    from './components/Mario/ThemeToggle.jsx';
+import LoginPage       from './components/Auth/LoginPage.jsx';
+import AdminPanel      from './components/Admin/AdminPanel.jsx';
+import TopicCity       from './components/TopicViz/TopicCity.jsx';
+import Dashboard       from './components/Dashboard/Dashboard.jsx';
+import EditorView      from './components/Editor/EditorView.jsx';
+import GameWorld       from './components/Game/GameWorld.jsx';
+import XpBar           from './components/Game/XpBar.jsx';
+import LevelComplete   from './components/Game/LevelComplete.jsx';
+import SettingsPanel   from './components/Settings/SettingsPanel.jsx';
+import CommunityFeed   from './components/Community/CommunityFeed.jsx';
+import ProfilePage     from './components/Profile/ProfilePage.jsx';
+import PremiumPage     from './components/Premium/PremiumPage.jsx';
+import AIToggle        from './components/AI/AIToggle.jsx';
+import ThemeToggle     from './components/Mario/ThemeToggle.jsx';
 import MarioBackground from './components/Mario/MarioBackground.jsx';
 import ReviewPopup     from './components/Review/ReviewPopup.jsx';
 import NotFoundPage    from './components/NotFound/NotFoundPage.jsx';
 import LegalPage       from './components/Legal/LegalPage.jsx';
-import { uploadFile } from './utils/api.js';
+import MockInterview   from './components/Mock/MockInterview.jsx';
+import { uploadFile }  from './utils/api.js';
 import './index.css';
 
 // ── URL ↔ Tab mapping ──────────────────────────────────────────
@@ -37,6 +38,7 @@ const TAB_ROUTES = {
   '/stats':     'dashboard',
   '/profile':   'profile',
   '/premium':   'premium',
+  '/mock':      'mock',
 };
 const TAB_URLS = {
   world:     '/world',
@@ -46,10 +48,11 @@ const TAB_URLS = {
   dashboard: '/stats',
   profile:   '/profile',
   premium:   '/premium',
+  mock:      '/mock',
 };
 
 function getTabFromPath(path) {
-  return TAB_ROUTES[path] || null; // null = 404
+  return TAB_ROUTES[path] || null;
 }
 function getUrlFromTab(tab) {
   return TAB_URLS[tab] || '/world';
@@ -162,6 +165,7 @@ function Nav({ tab, onTabChange, onSettings, onProfile }) {
     { id: 'world',     label: 'World',     icon: Gamepad,  always: false },
     { id: 'city',      label: 'City',      icon: Map,      always: false },
     { id: 'practice',  label: 'Practice',  icon: Code2,    always: false },
+    { id: 'mock',      label: 'Mock',      icon: Sword,    always: true  },
     { id: 'community', label: 'Community', icon: Users,    always: true  },
     { id: 'dashboard', label: 'Stats',     icon: BarChart3,always: false },
     { id: 'premium',   label: 'Premium',   icon: Crown,    always: true  },
@@ -177,13 +181,13 @@ function Nav({ tab, onTabChange, onSettings, onProfile }) {
         <span className="pixel text-xs text-white">Quest</span>
       </div>
 
-      <nav className="flex items-center gap-1">
+      <nav className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
         {items.map(({ id, label, icon: Icon, always }) => {
           const disabled = !always && !hasData;
           const active   = tab === id;
           return (
             <button key={id} onClick={() => !disabled && onTabChange(id)} disabled={disabled}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all shrink-0
                 ${active
                   ? isMario
                     ? 'bg-yellow-400/30 text-yellow-200 border border-yellow-400/50'
@@ -221,6 +225,7 @@ function Nav({ tab, onTabChange, onSettings, onProfile }) {
           </span>
         </div>
       )}
+
       <CsvImportButton />
       <ThemeToggle />
       <AIToggle />
@@ -282,11 +287,7 @@ function AppInner() {
       setTab(newTab);
     }
     window.addEventListener('popstate', onPop);
-    window.history.replaceState(
-      { tab: initialTab },
-      '',
-      window.location.pathname
-    );
+    window.history.replaceState({ tab: initialTab }, '', window.location.pathname);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
@@ -295,7 +296,6 @@ function AppInner() {
     onTabChange('practice');
   };
 
-  // Global keyboard shortcuts + custom events
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowSettings(s => !s); }
@@ -305,10 +305,10 @@ function AppInner() {
     const openTerms   = () => { setLegalTab('terms');   setShowLegal(true); };
     const openPrivacy = () => { setLegalTab('privacy'); setShowLegal(true); };
 
-    window.addEventListener('keydown',       handler);
-    window.addEventListener('open-premium',  openPremium);
-    window.addEventListener('open-terms',    openTerms);
-    window.addEventListener('open-privacy',  openPrivacy);
+    window.addEventListener('keydown',      handler);
+    window.addEventListener('open-premium', openPremium);
+    window.addEventListener('open-terms',   openTerms);
+    window.addEventListener('open-privacy', openPrivacy);
     return () => {
       window.removeEventListener('keydown',      handler);
       window.removeEventListener('open-premium', openPremium);
@@ -326,19 +326,23 @@ function AppInner() {
     </div>
   );
 
-  // ── 404 ──────────────────────────────────────────────────────
-  if (is404) return (
-    <NotFoundPage onGoHome={() => onTabChange('world')} />
-  );
+  if (is404) return <NotFoundPage onGoHome={() => onTabChange('world')} />;
+
+  // Mock interview gets full-screen treatment (no padding wrapper)
+  const isMockActive = tab === 'mock';
+  const isPractice   = tab === 'practice';
+  const fullScreen   = isMockActive || isPractice;
 
   return (
     <div className="min-h-screen flex flex-col"
       style={{ background: isMario ? 'transparent' : '#0f0e17', position: 'relative', zIndex: 1 }}>
+
+      {/* Hide nav during active mock session — nav is still rendered so state is preserved */}
       <Nav tab={tab} onTabChange={onTabChange}
         onSettings={() => setShowSettings(true)}
         onProfile={() => onTabChange('profile')} />
 
-      <main className={`flex-1 ${tab === 'practice' ? '' : 'p-4 sm:p-5 max-w-5xl mx-auto w-full'}`}>
+      <main className={`flex-1 ${fullScreen ? '' : 'p-4 sm:p-5 max-w-5xl mx-auto w-full'}`}>
         {tab === 'world' && (
           <div className="animate-slide-up space-y-4">
             <div>
@@ -360,6 +364,11 @@ function AppInner() {
         {tab === 'practice' && (
           <div className="h-[calc(100vh-48px)] p-3">
             <EditorView />
+          </div>
+        )}
+        {tab === 'mock' && (
+          <div className="animate-slide-up h-[calc(100vh-48px)]">
+            <MockInterview onClose={() => onTabChange('dashboard')} />
           </div>
         )}
         {tab === 'community' && (
@@ -399,21 +408,13 @@ function AppInner() {
         />
       )}
 
-      {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
-      )}
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
       {showLegal && (
-        <LegalPage
-          defaultTab={legalTab}
-          onClose={() => setShowLegal(false)}
-        />
+        <LegalPage defaultTab={legalTab} onClose={() => setShowLegal(false)} />
       )}
 
-      <ReviewPopup
-        onPractice={handlePractice}
-        onDismissAll={() => {}}
-      />
+      <ReviewPopup onPractice={handlePractice} onDismissAll={() => {}} />
       <Toast />
     </div>
   );
@@ -439,7 +440,6 @@ function Root() {
   );
 }
 
-// ── App entry ──────────────────────────────────────────────────
 export default function App() {
   return (
     <ThemeProvider>
