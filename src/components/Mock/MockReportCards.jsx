@@ -192,19 +192,31 @@ function ReportDetail({ report, onClose }) {
           {report.problemReports?.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Problems</p>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {report.problemReports.map(function(p, i) {
                   return (
-                    <div key={i} className="flex items-center gap-3 px-3 py-2.5
-                      rounded-xl bg-game-surface border border-game-border">
-                      <span className="text-xs text-slate-700 w-4">{i+1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-slate-300 truncate">{p.title}</p>
-                        <p className="text-xs text-slate-600 mt-0.5">{p.feedback}</p>
+                    <div key={i} className="p-3 rounded-xl bg-game-surface border border-game-border space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-700 w-4">{i+1}</span>
+                        <p className="text-xs font-medium text-slate-300 flex-1 truncate">{p.title}</p>
+                        {p.difficulty && (
+                          <span className={`text-xs shrink-0 ${
+                            p.difficulty==='Easy'  ?'text-green-500':
+                            p.difficulty==='Medium'?'text-yellow-500':'text-red-500'
+                          }`}>{p.difficulty}</span>
+                        )}
+                        <span className={`text-sm font-bold font-mono shrink-0 ${
+                          p.score>=80?'text-green-400':p.score>=50?'text-yellow-400':'text-red-400'
+                        }`}>{p.marks || p.score}</span>
                       </div>
-                      <span className={`text-sm font-bold shrink-0 ${
-                        p.score >= 80 ? 'text-green-400' : p.score >= 50 ? 'text-yellow-400' : 'text-red-400'
-                      }`}>{p.score}</span>
+                      <div className="h-1.5 bg-game-card rounded-full overflow-hidden ml-6">
+                        <div className="h-full rounded-full"
+                          style={{
+                            width: p.score + '%',
+                            background: p.score>=80?'#22c55e':p.score>=50?'#eab308':'#ef4444'
+                          }}/>
+                      </div>
+                      <p className="text-xs text-slate-600 ml-6">{p.feedback}</p>
                     </div>
                   );
                 })}
