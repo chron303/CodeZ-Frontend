@@ -26,6 +26,7 @@ import NotFoundPage    from './components/NotFound/NotFoundPage.jsx';
 import LegalPage       from './components/Legal/LegalPage.jsx';
 import MockInterview   from './components/Mock/MockInterview.jsx';
 import { uploadFile }  from './utils/api.js';
+import useKeepalive from './hooks/useKeepalive.js';
 import './index.css';
 
 // ── URL ↔ Tab mapping ──────────────────────────────────────────
@@ -262,6 +263,7 @@ function EmptyState() {
 
 // ── App shell ──────────────────────────────────────────────────
 function AppInner() {
+  useKeepalive();
   const { topics, openProblem, levelCompleteEvent, dismissLevelComplete, dataLoading } = useApp();
   const { isAdmin } = useAuth();
   const { isMario } = useTheme();
