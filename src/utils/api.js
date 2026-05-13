@@ -1,8 +1,31 @@
 // frontend/src/utils/api.js
 
-var BASE = (process.env.REACT_APP_API_URL || '') + '/api';
+var BASE = (import.meta.env.VITE_API_URL || '') + '/api';
 
-// Upload CSV/Excel file → { topics, stats }
+// ── Authenticated fetch ────────────────────────────────────────
+// Attaches Firebase ID token to Authorization header.
+// Use this for all sensitive endpoints (AI, mock, mock reports).
+// uid no longer needs to be sent in the body — backend extracts it from the token.
+export async function authFetch(path, options) {
+  // Lazy import avoids circular dependency issues
+  var { auth } = await import('../firebase.js');
+  var token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+
+  var res = await fetch(BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options && options.headers),
+      'Authorization': 'Bearer ' + token,
+    },
+  });
+
+  var data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed (' + res.status + ')');
+  return data;
+}
+
+// ── Upload CSV/Excel file → { topics, stats } ──────────────────
 export function uploadFile(file, onProgress) {
   var form = new FormData();
   form.append('file', file);
@@ -35,14 +58,14 @@ export function uploadFile(file, onProgress) {
   });
 }
 
-// Run code against test cases
+// ── Run code against test cases ────────────────────────────────
 // language: 'python' | 'cpp' | 'java'
 // Returns { results, passed, total, verdict, allPassed }
 export function runCode(language, code, testCases) {
   return fetch(BASE + '/judge/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ language: language, code: code, testCases: testCases }),
+    body: JSON.stringify({ language, code, testCases }),
   }).then(function(res) {
     return res.json().then(function(data) {
       if (!res.ok) throw new Error(data.error || ('Judge error (' + res.status + ')'));
@@ -51,7 +74,7 @@ export function runCode(language, code, testCases) {
   });
 }
 
-// Fetch LeetCode user stats via backend proxy
+// ── Fetch LeetCode user stats via backend proxy ────────────────
 export function fetchLeetCode(username) {
   return fetch(BASE + '/leetcode/' + encodeURIComponent(username.trim()))
     .then(function(res) {
