@@ -11,10 +11,15 @@ export async function authFetch(path, options) {
   var { auth } = await import('../firebase.js');
   var token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
 
+  var method = (options && options.method) || 'GET';
+  var isGet  = method.toUpperCase() === 'GET';
+
   var res = await fetch(BASE + path, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      // Only set Content-Type for requests with a body — GET requests with
+      // Content-Type trigger a CORS preflight which can fail on Railway.
+      ...(!isGet && { 'Content-Type': 'application/json' }),
       ...(options && options.headers),
       'Authorization': 'Bearer ' + token,
     },

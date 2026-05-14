@@ -56,7 +56,7 @@ function LangPicker({ langId, onChange }) {
   var [open, setOpen] = useState(false);
   var lang = getLanguage(langId);
   return (
-    <div className="relative">
+    <div className="relative" onKeyDown={function(e) { if (e.key === 'Escape') setOpen(false); }}>
       <button onClick={function() { setOpen(function(o) { return !o; }); }}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${lang.badge}`}>
         {lang.label}
