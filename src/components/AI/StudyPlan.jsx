@@ -20,8 +20,13 @@ export default function StudyPlan() {
   const [error,   setError]   = useState('');
 
   useEffect(function() {
-    if (summary?.totalProblems > 0 && premium) fetchPlan();
-  }, [premium]);
+    // Wait for premium AND valid Firebase session before fetching.
+    // Small defer ensures auth.currentUser is hydrated before getIdToken() is called.
+    if (summary?.totalProblems > 0 && premium) {
+      var t = setTimeout(fetchPlan, 200);
+      return function() { clearTimeout(t); };
+    }
+  }, [premium, summary?.totalProblems]);
 
   async function fetchPlan() {
     if (loading) return;
