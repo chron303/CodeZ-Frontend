@@ -72,7 +72,6 @@ function defaultProgression() {
     streak: 0,
     lastSolveDate: null,
     totalSolved: 0,
-    solvedIds: [],
     recentEvents: [],
   };
 }
@@ -80,8 +79,10 @@ function defaultProgression() {
 export { defaultProgression };
 
 // ── Award XP for solving a problem ────────────────────────────
-export function awardSolve(currentProg, problem) {
-  if (currentProg.solvedIds?.includes(problem.id)) {
+// alreadySolved: passed from AppContext which checks progressMap (Firestore source of truth)
+// This prevents double-awarding XP without storing a growing solvedIds array.
+export function awardSolve(currentProg, problem, alreadySolved = false) {
+  if (alreadySolved) {
     return { newProg: currentProg, xpGained: 0, leveledUp: false, newLevel: currentProg.level };
   }
 
@@ -123,7 +124,6 @@ export function awardSolve(currentProg, problem) {
     streak,
     lastSolveDate: today,
     totalSolved: (currentProg.totalSolved ?? 0) + 1,
-    solvedIds: [...(currentProg.solvedIds ?? []), problem.id],
     recentEvents: [event, ...(currentProg.recentEvents ?? [])].slice(0, 20),
   };
 

@@ -183,18 +183,30 @@ export function getTierStyle(tier) {
 // Returns achievements sorted by tier desc, with unlocked flag.
 // summary  — computed live from actual solve state (never stale)
 // progression — XP, level, streak (time-based, persisted in Firestore)
+// Returns true if the stored streak is still valid (last solve was today or yesterday)
+function isStreakValid(progression) {
+  const last = progression?.lastSolveDate;
+  if (!last) return false;
+  const today     = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  return last === today || last === yesterday;
+}
+
 export function evaluateAchievements(summary, progression) {
-  // Guard: if no problems exist, nothing should be unlocked
-  // (handles the case where problems were deleted from the bank)
   const safeSummary     = summary     || { totalSolved:0, totalProblems:0, overallPct:0, topics:[] };
   const safeProgression = progression || { level:0, streak:0, xp:0, recentEvents:[] };
+
+  // Only count streak if lastSolveDate is today or yesterday — prevents
+  // stale streaks from unlocking achievements after a long break.
+  const validStreak = isStreakValid(safeProgression) ? (safeProgression.streak ?? 0) : 0;
+  const progressionForCheck = { ...safeProgression, streak: validStreak };
 
   return ACHIEVEMENTS
     .map(a => ({
       ...a,
       unlocked: safeSummary.totalProblems > 0
-        ? a.check(safeSummary, safeProgression)
-        : false,  // no problems in bank = nothing unlocked
+        ? a.check(safeSummary, progressionForCheck)
+        : false,
     }))
     .sort((a, b) => {
       if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;

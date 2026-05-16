@@ -132,8 +132,10 @@ export function AppProvider({ children }) {
     if (user) markProblemSolved(user.uid, problemId, nowSolved);
 
     if (nowSolved && rawProblem) {
+      // Pass alreadySolved so awardSolve doesn't need its own solvedIds array
+      const wasAlreadySolved = !!(progressMapRef.current[problemId]?.solved);
       setProgression(prev => {
-        const { newProg, xpGained, leveledUp, newLevel, streakBonus } = awardSolve(prev, rawProblem);
+        const { newProg, xpGained, leveledUp, newLevel, streakBonus } = awardSolve(prev, rawProblem, wasAlreadySolved);
         // Save to both localStorage (uid-keyed) and Firestore
         saveProgression(newProg, user?.uid);
         if (user) saveUserProgression(user.uid, newProg);
@@ -183,13 +185,56 @@ export function AppProvider({ children }) {
   }, [user]);
 
   // ── Reset progress ────────────────────────────────────────────
-  const resetProgress = useCallback(() => {
+  // Clears local state, localStorage cache, AND Firestore progress/notes/progression.
+  const resetProgress = useCallback(async () => {
     setProgressMap({});
     setNotesMap({});
     setActiveProblem(null);
-    // Also clear this user's localStorage cache
+
+    // Clear localStorage cache for this user
     if (user) clearProgression(user.uid);
-    showToast('Progress cleared locally. Firestore data preserved for safety.', 'info');
+
+    if (user) {
+      try {
+        // Import writeBatch to bulk-delete Firestore progress docs
+        const { writeBatch, collection, getDocs, doc } = await import('firebase/firestore');
+        const { db } = await import('../firebase.js');
+        const { saveUserProgression } = await import('../utils/firestoreService.js');
+
+        // Reset progression in Firestore
+        const blankProg = defaultProgression();
+        await saveUserProgression(user.uid, blankProg);
+        setProgression(blankProg);
+        saveProgression(blankProg, user.uid);
+
+        // Batch delete all userProgress docs (up to 500 at a time)
+        const progressSnap = await getDocs(
+          collection(db, 'userProgress', user.uid, 'problems')
+        );
+        if (progressSnap.size > 0) {
+          const batch = writeBatch(db);
+          progressSnap.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+
+        // Batch delete all userNotes docs
+        const notesSnap = await getDocs(
+          collection(db, 'userNotes', user.uid, 'notes')
+        );
+        if (notesSnap.size > 0) {
+          const batch = writeBatch(db);
+          notesSnap.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+
+        showToast('All progress reset successfully.', 'info');
+      } catch(e) {
+        console.error('[resetProgress]', e.message);
+        showToast('Local progress cleared. Some Firestore data may remain.', 'error');
+      }
+    } else {
+      showToast('Progress cleared.', 'info');
+    }
   }, [user]);
 
   // ── Export progress ───────────────────────────────────────────
