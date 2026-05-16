@@ -1,5 +1,5 @@
 // frontend/src/components/Profile/ProfilePage.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Camera, Save, Loader, CheckCircle, AlertCircle,
          MessageSquare, ArrowUp, Eye, BookOpen, Trophy, Star, Phone, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -36,7 +36,7 @@ export default function ProfilePage() {
   const [loading,   setLoading]   = useState(true);
   const [saved,     setSaved]     = useState(false);
   const [error,     setError]     = useState('');
-  const [tab,       setTab]       = useState('profile'); // profile | posts
+  const [tab,       setTab]       = useState('profile');
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export default function ProfilePage() {
         setBio(p.bio || '');
         setPhotoURL(p.photoURL || user.photoURL || '');
       } else {
-        setUsername(user.displayName?.toLowerCase().replace(/\s+/g,'.') || '');
+        setUsername(user.displayName?.toLowerCase().replace(/\s+/g, '.') || '');
         setPhotoURL(user.photoURL || '');
       }
       setPosts(userPostsList);
@@ -59,9 +59,22 @@ export default function ProfilePage() {
     });
   }, [user]);
 
+  // ── Compute community stats LIVE from actual posts data ───────
+  // Never trust profile.stats for display — it can be stale.
+  // This fixes Bug 6: stats showing same values for all users.
+  const liveStats = useMemo(() => {
+    const postsCount   = posts.length;
+    const totalUpvotes = posts.reduce((sum, p) => sum + (p.upvoteCount || 0), 0);
+    const totalViews   = posts.reduce((sum, p) => sum + (p.viewCount   || 0), 0);
+    // repliesCount still comes from profile.stats since replies are subcollections
+    // and would require an expensive collectionGroup query to count live
+    const repliesCount = profile?.stats?.repliesCount || 0;
+    return { postsCount, totalUpvotes, totalViews, repliesCount };
+  }, [posts, profile]);
+
   async function handleSave() {
     if (!username.trim()) { setError('Username is required.'); return; }
-    const clean = username.toLowerCase().replace(/[^a-z0-9_.]/g,'');
+    const clean = username.toLowerCase().replace(/[^a-z0-9_.]/g, '');
     if (clean.length < 3) { setError('Username must be at least 3 characters.'); return; }
 
     setSaving(true); setError('');
@@ -77,27 +90,24 @@ export default function ProfilePage() {
         email:       user.email || '',
       };
 
-      // Upsert userProfiles
       const ref = doc(db, 'userProfiles', user.uid);
       await setDoc(ref, {
         ...data,
-        stats: profile?.stats || { postsCount:0, repliesCount:0, totalUpvotes:0, totalViews:0 },
+        stats: profile?.stats || { postsCount: 0, repliesCount: 0, totalUpvotes: 0, totalViews: 0 },
         joinedAt:  profile?.joinedAt || serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
-      setProfile(prev => ({ ...(prev||{}), ...data }));
+      setProfile(prev => ({ ...(prev || {}), ...data }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch(e) { setError(e.message); }
     finally { setSaving(false); }
   }
 
-  // Handle avatar URL input (or Google photo as default)
   function handlePhotoInput(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Convert to base64 data URL (simple client-side approach)
     const reader = new FileReader();
     reader.onload = ev => setPhotoURL(ev.target.result);
     reader.readAsDataURL(file);
@@ -115,8 +125,6 @@ export default function ProfilePage() {
     </div>
   );
 
-  const stats = profile?.stats || {};
-
   return (
     <div className="max-w-2xl mx-auto space-y-5">
       {/* Header card */}
@@ -129,7 +137,7 @@ export default function ProfilePage() {
                 ? <img src={photoURL} alt="" className="w-full h-full object-cover"/>
                 : <div className="w-full h-full bg-purple-600/30 flex items-center justify-center">
                     <span className="text-3xl font-bold text-purple-300">
-                      {(username||user.displayName||'?')[0].toUpperCase()}
+                      {(username || user.displayName || '?')[0].toUpperCase()}
                     </span>
                   </div>
               }
@@ -161,7 +169,7 @@ export default function ProfilePage() {
             )}
             <p className="text-slate-700 text-xs mt-2">
               Member since {profile?.joinedAt?.toDate
-                ? profile.joinedAt.toDate().toLocaleDateString('en-US', {month:'long', year:'numeric'})
+                ? profile.joinedAt.toDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                 : 'recently'}
             </p>
           </div>
@@ -170,10 +178,12 @@ export default function ProfilePage() {
 
       {/* Tabs */}
       <div className="flex border-b border-game-border">
-        {[['profile','Edit Profile'],['posts','My Posts'],['stats','Stats']].map(([id,label]) => (
+        {[['profile', 'Edit Profile'], ['posts', 'My Posts'], ['stats', 'Stats']].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-4 py-2.5 text-xs font-medium transition-colors
-              ${tab===id?'text-purple-400 border-b-2 border-purple-500':'text-slate-600 hover:text-slate-400'}`}>
+              ${tab === id
+                ? 'text-purple-400 border-b-2 border-purple-500'
+                : 'text-slate-600 hover:text-slate-400'}`}>
             {label}
           </button>
         ))}
@@ -182,7 +192,6 @@ export default function ProfilePage() {
       {/* Edit Profile tab */}
       {tab === 'profile' && (
         <div className="game-card p-5 space-y-4">
-          {/* Display name for phone users */}
           {user.phoneNumber && (
             <div>
               <label className="text-xs text-slate-500 mb-1.5 block">Display Name</label>
@@ -195,7 +204,6 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Phone number display */}
           {user.phoneNumber && (
             <div>
               <label className="text-xs text-slate-500 mb-1.5 block">Phone Number</label>
@@ -212,7 +220,7 @@ export default function ProfilePage() {
             <label className="text-xs text-slate-500 mb-1.5 block">Username</label>
             <div className="flex items-center gap-2 px-3 py-2.5 bg-game-surface border border-game-border rounded-xl">
               <span className="text-slate-500 text-sm">@</span>
-              <input value={username} onChange={e=>setUsername(e.target.value.toLowerCase())}
+              <input value={username} onChange={e => setUsername(e.target.value.toLowerCase())}
                 placeholder="yourname"
                 className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-700"/>
             </div>
@@ -221,17 +229,15 @@ export default function ProfilePage() {
 
           <div>
             <label className="text-xs text-slate-500 mb-1.5 block">Avatar URL</label>
-            <div className="flex gap-2">
-              <input value={photoURL} onChange={e=>setPhotoURL(e.target.value)}
-                placeholder="https://... or upload above"
-                className="flex-1 px-3 py-2.5 text-sm bg-game-surface border border-game-border rounded-xl
-                  text-white placeholder-slate-700 outline-none focus:border-purple-500/60 transition-colors"/>
-            </div>
+            <input value={photoURL} onChange={e => setPhotoURL(e.target.value)}
+              placeholder="https://... or upload above"
+              className="w-full px-3 py-2.5 text-sm bg-game-surface border border-game-border rounded-xl
+                text-white placeholder-slate-700 outline-none focus:border-purple-500/60 transition-colors"/>
           </div>
 
           <div>
             <label className="text-xs text-slate-500 mb-1.5 block">Bio</label>
-            <textarea value={bio} onChange={e=>setBio(e.target.value)} rows={3}
+            <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3}
               placeholder="Tell the community about yourself…"
               className="w-full px-3 py-2.5 text-sm bg-game-surface border border-game-border rounded-xl
                 text-slate-300 placeholder-slate-700 outline-none resize-none
@@ -248,8 +254,9 @@ export default function ProfilePage() {
           <button onClick={handleSave} disabled={saving}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
               bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40 transition-colors">
-            {saving ? <Loader className="w-4 h-4 animate-spin"/> : saved
-              ? <CheckCircle className="w-4 h-4 text-green-300"/> : <Save className="w-4 h-4"/>}
+            {saving ? <Loader className="w-4 h-4 animate-spin"/>
+              : saved ? <CheckCircle className="w-4 h-4 text-green-300"/>
+              : <Save className="w-4 h-4"/>}
             {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Profile'}
           </button>
         </div>
@@ -269,9 +276,11 @@ export default function ProfilePage() {
                 <p className="text-sm font-semibold text-white">{p.title}</p>
                 <div className="flex items-center gap-2 text-xs text-slate-600 shrink-0">
                   <ArrowUp className="w-3 h-3"/>
-                  <span>{p.upvoteCount||0}</span>
+                  <span>{p.upvoteCount || 0}</span>
                   <MessageSquare className="w-3 h-3 ml-1"/>
-                  <span>{p.replyCount||0}</span>
+                  <span>{p.replyCount || 0}</span>
+                  <Eye className="w-3 h-3 ml-1"/>
+                  <span>{p.viewCount || 0}</span>
                 </div>
               </div>
               <p className="text-xs text-slate-600 line-clamp-2">{p.body}</p>
@@ -281,16 +290,16 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Stats tab */}
+      {/* Stats tab — uses liveStats computed from actual posts, not cached profile.stats */}
       {tab === 'stats' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <StatCard icon={BookOpen}     label="Problems Solved"  value={summary?.totalSolved}      color="text-green-400 bg-green-500"/>
-            <StatCard icon={Trophy}       label="Level"            value={progression?.level}        color="text-purple-400 bg-purple-500"/>
-            <StatCard icon={MessageSquare}label="Posts"            value={stats.postsCount}          color="text-blue-400 bg-blue-500"/>
-            <StatCard icon={ArrowUp}      label="Upvotes received" value={stats.totalUpvotes}        color="text-orange-400 bg-orange-500"/>
-            <StatCard icon={MessageSquare}label="Replies"          value={stats.repliesCount}        color="text-teal-400 bg-teal-500"/>
-            <StatCard icon={Star}         label="Streak"           value={progression?.streak}       color="text-yellow-400 bg-yellow-500"/>
+            <StatCard icon={BookOpen}      label="Problems Solved"  value={summary?.totalSolved}       color="text-green-400 bg-green-500"/>
+            <StatCard icon={Trophy}        label="Level"            value={progression?.level}         color="text-purple-400 bg-purple-500"/>
+            <StatCard icon={MessageSquare} label="Posts"            value={liveStats.postsCount}       color="text-blue-400 bg-blue-500"/>
+            <StatCard icon={ArrowUp}       label="Upvotes received" value={liveStats.totalUpvotes}     color="text-orange-400 bg-orange-500"/>
+            <StatCard icon={MessageSquare} label="Replies"          value={liveStats.repliesCount}     color="text-teal-400 bg-teal-500"/>
+            <StatCard icon={Star}          label="Streak"           value={progression?.streak}        color="text-yellow-400 bg-yellow-500"/>
           </div>
 
           {/* XP progress */}
@@ -302,7 +311,27 @@ export default function ProfilePage() {
               </div>
               <div className="h-2 bg-game-surface rounded-full overflow-hidden">
                 <div className="h-full bg-purple-500 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, ((progression.xp||0) % 100))}%` }}/>
+                  style={{ width: `${Math.min(100, ((progression.xp || 0) % 100))}%` }}/>
+              </div>
+            </div>
+          )}
+
+          {/* Quick post breakdown */}
+          {posts.length > 0 && (
+            <div className="game-card p-4">
+              <p className="pixel text-xs text-slate-400 mb-3">Post Performance</p>
+              <div className="space-y-2">
+                {posts.slice(0, 5).map(p => (
+                  <div key={p.id} className="flex items-center gap-3">
+                    <p className="text-xs text-slate-400 flex-1 truncate">{p.title}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-600 shrink-0">
+                      <ArrowUp className="w-3 h-3"/>
+                      <span>{p.upvoteCount || 0}</span>
+                      <Eye className="w-3 h-3 ml-1"/>
+                      <span>{p.viewCount || 0}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

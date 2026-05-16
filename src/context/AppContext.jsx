@@ -1,11 +1,12 @@
 // frontend/src/context/AppContext.jsx
 //
-// Loads problems from Firestore (real-time listener — admin changes reflect immediately).
+// Loads problems from Firestore (real-time listener).
 // Stores user progress, notes, and XP in Firestore per UID.
-// localStorage still used for offline fallback and language pref.
+// localStorage used as write-through cache — keyed by uid to prevent
+// cross-user data bleed when multiple accounts share a device.
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { loadProgression, saveProgression, awardSolve } from '../utils/progression.js';
+import { loadProgression, saveProgression, clearProgression, awardSolve, defaultProgression } from '../utils/progression.js';
 import { exportProgressCSV } from '../utils/storage.js';
 import {
   listenToProblems,
@@ -18,7 +19,6 @@ import { useAuth } from './AuthContext.jsx';
 
 const AppContext = createContext(null);
 
-// Build topics array from flat problem list + user progress/notes
 function buildTopics(problems, progressMap, notesMap) {
   const topicMap = {};
   for (const p of problems) {
@@ -33,7 +33,6 @@ function buildTopics(problems, progressMap, notesMap) {
   }
   for (const t of Object.values(topicMap)) {
     t.percentage = t.total > 0 ? Math.round((t.solved / t.total) * 100) : 0;
-    // Sort problems by order field then title
     t.problems.sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.title.localeCompare(b.title));
   }
   return Object.values(topicMap).sort((a, b) => a.topic.localeCompare(b.topic));
@@ -42,35 +41,28 @@ function buildTopics(problems, progressMap, notesMap) {
 export function AppProvider({ children }) {
   const { user } = useAuth();
 
-  // Raw Firestore data
-  const [rawProblems,  setRawProblems]  = useState([]);   // from Firestore listener
-  const [progressMap,  setProgressMap]  = useState({});   // { [problemId]: { solved, attempts } }
-  const [notesMap,     setNotesMap]     = useState({});   // { [problemId]: "note text" }
-  const [customLists,  setCustomLists]  = useState([]);   // user-uploaded CSVs
-
-  // Derived topics array (computed from above)
+  const [rawProblems,  setRawProblems]  = useState([]);
+  const [progressMap,  setProgressMap]  = useState({});
+  const [notesMap,     setNotesMap]     = useState({});
+  const [customLists,  setCustomLists]  = useState([]);
   const [topics,       setTopics]       = useState([]);
-
-  // Editor state
   const [activeProblem,setActiveProblem]= useState(null);
 
-  // Progression (XP etc)
-  const [progression,  setProgression]  = useState(() => loadProgression());
+  // ── Key fix: initialise progression to default (not localStorage)
+  // We wait for Firestore to load the correct per-user data.
+  // localStorage is only used as a write-through cache after uid is known.
+  const [progression,  setProgression]  = useState(() => defaultProgression());
 
-  // Level complete overlay
   const [levelCompleteEvent, setLevelCompleteEvent] = useState(null);
-
-  // UI
   const [toast,        setToast]        = useState(null);
   const [dataLoading,  setDataLoading]  = useState(true);
 
-  // Keep refs for callbacks that need current state without re-creating
   const progressMapRef = useRef(progressMap);
   const notesMapRef    = useRef(notesMap);
   useEffect(() => { progressMapRef.current = progressMap; }, [progressMap]);
   useEffect(() => { notesMapRef.current    = notesMap; },   [notesMap]);
 
-  // ── 1. Real-time listener for built-in problems ───────────
+  // ── 1. Real-time listener for built-in problems ───────────────
   useEffect(() => {
     const unsub = listenToProblems(problems => {
       setRawProblems(problems);
@@ -78,18 +70,27 @@ export function AppProvider({ children }) {
     return unsub;
   }, []);
 
-  // ── 2. Load user-specific data when auth changes ──────────
+  // ── 2. Load user-specific data when auth changes ──────────────
   useEffect(() => {
     if (!user) {
+      // User logged out — reset ALL state to defaults.
+      // Do NOT load from localStorage here (would show previous user's data).
       setProgressMap({});
       setNotesMap({});
       setCustomLists([]);
-      setProgression(loadProgression());
+      setProgression(defaultProgression()); // blank slate, not localStorage
+      setActiveProblem(null);
       setDataLoading(false);
       return;
     }
 
     setDataLoading(true);
+
+    // Immediately load from this user's localStorage cache while Firestore loads
+    // (uid-keyed so it's always this user's data)
+    const cachedProg = loadProgression(user.uid);
+    if (cachedProg) setProgression(cachedProg);
+
     Promise.all([
       loadUserProgress(user.uid),
       loadUserNotes(user.uid),
@@ -98,47 +99,56 @@ export function AppProvider({ children }) {
     ]).then(([progress, notes, prog, lists]) => {
       setProgressMap(progress || {});
       setNotesMap(notes || {});
-      if (prog) setProgression(prog);
+      if (prog) {
+        // Firestore is authoritative — overwrite the localStorage cache
+        setProgression(prog);
+        saveProgression(prog, user.uid); // sync cache with Firestore data
+      }
       setCustomLists(lists || []);
       setDataLoading(false);
     }).catch(() => setDataLoading(false));
   }, [user?.uid]);
 
-  // ── 3. Rebuild topics whenever problems or user data change ──
+  // ── 3. Rebuild topics whenever problems or user data change ───
   useEffect(() => {
     setTopics(buildTopics(rawProblems, progressMap, notesMap));
   }, [rawProblems, progressMap, notesMap]);
 
-  // ── Mark one problem solved/unsolved ──────────────────────
+  // ── Mark one problem solved/unsolved ──────────────────────────
   const markSolved = useCallback((topicName, problemId, fromJudge = false) => {
-    const current    = progressMapRef.current[problemId];
-    const nowSolved  = !(current?.solved);
+    const current   = progressMapRef.current[problemId];
+    const nowSolved = !(current?.solved);
     const rawProblem = rawProblems.find(p => p.id === problemId);
 
-    // Optimistic update
     setProgressMap(prev => ({
       ...prev,
-      [problemId]: { ...(prev[problemId] || {}), solved: nowSolved, attempts: ((prev[problemId]?.attempts) || 0) + 1 },
+      [problemId]: {
+        ...(prev[problemId] || {}),
+        solved:   nowSolved,
+        attempts: ((prev[problemId]?.attempts) || 0) + 1,
+      },
     }));
 
-    // Persist to Firestore
     if (user) markProblemSolved(user.uid, problemId, nowSolved);
 
-    // Award XP on solve
     if (nowSolved && rawProblem) {
       setProgression(prev => {
         const { newProg, xpGained, leveledUp, newLevel, streakBonus } = awardSolve(prev, rawProblem);
-        saveProgression(newProg);
+        // Save to both localStorage (uid-keyed) and Firestore
+        saveProgression(newProg, user?.uid);
         if (user) saveUserProgression(user.uid, newProg);
         if (fromJudge) {
-          setLevelCompleteEvent({ problem: rawProblem, xpGained, leveledUp, newLevel, streakBonus: streakBonus ?? 0 });
+          setLevelCompleteEvent({
+            problem: rawProblem, xpGained, leveledUp, newLevel,
+            streakBonus: streakBonus ?? 0,
+          });
         }
         return newProg;
       });
     }
   }, [user, rawProblems]);
 
-  // ── Mark every problem in a topic solved ──────────────────
+  // ── Mark every problem in a topic solved ──────────────────────
   const markTopicSolved = useCallback((topicName) => {
     const topic = topics.find(t => t.topic === topicName);
     if (!topic) return;
@@ -152,9 +162,8 @@ export function AppProvider({ children }) {
     setProgressMap(prev => ({ ...prev, ...updates }));
   }, [topics, progressMap, user]);
 
-  // ── Open problem in editor ────────────────────────────────
+  // ── Open problem in editor ────────────────────────────────────
   const openProblem = useCallback((problem) => {
-    // Use Firestore test cases (authoritative), with fallback
     const testCases = problem.testCases?.length ? problem.testCases : [
       { id: 1, input: 'null', stdinLines: '', expected: 'null', label: 'Test 1' },
       { id: 2, input: 'null', stdinLines: '', expected: 'null', label: 'Test 2' },
@@ -166,29 +175,29 @@ export function AppProvider({ children }) {
     setActiveProblem(prev => prev ? { ...prev, testCases } : prev);
   }, []);
 
-  // ── Save note ─────────────────────────────────────────────
+  // ── Save note ─────────────────────────────────────────────────
   const saveNote = useCallback((topicName, problemId, note) => {
     setNotesMap(prev => ({ ...prev, [problemId]: note }));
     setActiveProblem(prev => prev?.id === problemId ? { ...prev, note } : prev);
     if (user) saveUserNote(user.uid, problemId, note);
   }, [user]);
 
-  // ── Reset progress ────────────────────────────────────────
+  // ── Reset progress ────────────────────────────────────────────
   const resetProgress = useCallback(() => {
-    // Can't bulk-delete Firestore easily; just clear local state
-    // The user will have to individually unsolved or re-upload
     setProgressMap({});
     setNotesMap({});
     setActiveProblem(null);
+    // Also clear this user's localStorage cache
+    if (user) clearProgression(user.uid);
     showToast('Progress cleared locally. Firestore data preserved for safety.', 'info');
-  }, []);
+  }, [user]);
 
-  // ── Export progress ───────────────────────────────────────
+  // ── Export progress ───────────────────────────────────────────
   const exportProgress = useCallback(() => {
     exportProgressCSV(topics);
   }, [topics]);
 
-  // ── Save custom list (CSV upload) ─────────────────────────
+  // ── Save custom list ──────────────────────────────────────────
   const saveList = useCallback(async (name, problems) => {
     if (!user) return;
     const ref = await saveCustomList(user.uid, name, problems);
@@ -204,11 +213,12 @@ export function AppProvider({ children }) {
     setTimeout(() => setToast(null), 2500);
   }, []);
 
-  // ── Derived summary ───────────────────────────────────────
+  // ── Derived summary ───────────────────────────────────────────
   const totalProblems = topics.reduce((s, t) => s + t.total, 0);
   const totalSolved   = topics.reduce((s, t) => s + t.solved, 0);
   const summary = {
-    totalProblems, totalSolved,
+    totalProblems,
+    totalSolved,
     totalTopics: topics.length,
     topics,
     overallPct: totalProblems === 0 ? 0 : Math.round((totalSolved / totalProblems) * 100),

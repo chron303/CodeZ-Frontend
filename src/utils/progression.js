@@ -1,25 +1,16 @@
 // frontend/src/utils/progression.js
 //
-// XP and streak system for Phase 3.
-// Persisted in localStorage so progress survives page refreshes.
+// XP and streak system.
+// Persisted in Firestore (source of truth) with localStorage as write-through cache.
 //
-// XP awards:
-//   Easy   solved → +10 XP
-//   Medium solved → +25 XP
-//   Hard   solved → +50 XP
-//   Daily streak bonus → +5 XP per day
-//
-// Levels: XP thresholds double each level starting at 100.
-//   Level 1 → 0–99 XP
-//   Level 2 → 100–299 XP
-//   Level 3 → 300–699 XP  (threshold = prev + 200 * level)
+// FIX: storage key is now per-user (includes uid) so different users on the same
+// device don't share cached progression data.
 
-const STORAGE_KEY = 'dsa-quest-progression';
+const STORAGE_KEY_PREFIX = 'dsa-quest-progression-';
 
 const XP_PER_DIFFICULTY = { Easy: 10, Medium: 25, Hard: 50 };
 
-// ── Level thresholds ────────────────────────────────────────────
-// Returns XP needed to reach a given level
+// ── Level thresholds ───────────────────────────────────────────
 function xpForLevel(level) {
   if (level <= 1) return 0;
   let total = 0;
@@ -27,25 +18,50 @@ function xpForLevel(level) {
   return total;
 }
 
-// Returns which level a given XP total corresponds to
 function levelForXp(xp) {
   let level = 1;
   while (xpForLevel(level + 1) <= xp) level++;
   return level;
 }
 
+function storageKey(uid) {
+  return uid ? STORAGE_KEY_PREFIX + uid : null;
+}
+
 // ── Load / save ────────────────────────────────────────────────
-export function loadProgression() {
+// uid is required — without it we never read from localStorage
+// (prevents reading another user's cached data)
+export function loadProgression(uid) {
+  if (!uid) return defaultProgression();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(uid));
     if (raw) return JSON.parse(raw);
   } catch {}
   return defaultProgression();
 }
 
-export function saveProgression(prog) {
+export function saveProgression(prog, uid) {
+  if (!uid) return; // never save without uid
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prog));
+    localStorage.setItem(storageKey(uid), JSON.stringify(prog));
+  } catch {}
+}
+
+// Clear a specific user's cached progression (call on logout)
+export function clearProgression(uid) {
+  if (!uid) return;
+  try {
+    localStorage.removeItem(storageKey(uid));
+  } catch {}
+}
+
+// Clear ALL users' cached progression from localStorage
+// (safety net — call from admin or on account delete)
+export function clearAllProgressionCache() {
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(STORAGE_KEY_PREFIX))
+      .forEach(k => localStorage.removeItem(k));
   } catch {}
 }
 
@@ -54,18 +70,18 @@ function defaultProgression() {
     xp: 0,
     level: 1,
     streak: 0,
-    lastSolveDate: null,   // ISO date string (YYYY-MM-DD)
+    lastSolveDate: null,
     totalSolved: 0,
-    solvedIds: [],         // problem ids solved this session
-    recentEvents: [],      // [{ type, label, xp, ts }] for the feed
+    solvedIds: [],
+    recentEvents: [],
   };
 }
 
+export { defaultProgression };
+
 // ── Award XP for solving a problem ────────────────────────────
-// Returns { newProg, xpGained, leveledUp, newLevel }
 export function awardSolve(currentProg, problem) {
-  // Don't double-award the same problem
-  if (currentProg.solvedIds.includes(problem.id)) {
+  if (currentProg.solvedIds?.includes(problem.id)) {
     return { newProg: currentProg, xpGained: 0, leveledUp: false, newLevel: currentProg.level };
   }
 
@@ -73,26 +89,23 @@ export function awardSolve(currentProg, problem) {
   const today    = new Date().toISOString().slice(0, 10);
   const lastDate = currentProg.lastSolveDate;
 
-  // Streak: consecutive calendar days
-  let streak = currentProg.streak;
+  let streak = currentProg.streak ?? 0;
   let streakBonus = 0;
 
   if (lastDate === today) {
-    // Same day — streak unchanged
+    // same day — no change
   } else if (lastDate === prevDay(today)) {
-    // Consecutive day — extend streak
     streak += 1;
     streakBonus = 5;
   } else {
-    // Streak broken
     streak = 1;
   }
 
-  const xpGained   = baseXp + streakBonus;
-  const oldLevel   = currentProg.level;
-  const newXp      = currentProg.xp + xpGained;
-  const newLevel   = levelForXp(newXp);
-  const leveledUp  = newLevel > oldLevel;
+  const xpGained  = baseXp + streakBonus;
+  const oldLevel  = currentProg.level ?? 1;
+  const newXp     = (currentProg.xp ?? 0) + xpGained;
+  const newLevel  = levelForXp(newXp);
+  const leveledUp = newLevel > oldLevel;
 
   const event = {
     type: 'solve',
@@ -109,25 +122,24 @@ export function awardSolve(currentProg, problem) {
     level: newLevel,
     streak,
     lastSolveDate: today,
-    totalSolved: currentProg.totalSolved + 1,
-    solvedIds: [...currentProg.solvedIds, problem.id],
-    recentEvents: [event, ...currentProg.recentEvents].slice(0, 20),
+    totalSolved: (currentProg.totalSolved ?? 0) + 1,
+    solvedIds: [...(currentProg.solvedIds ?? []), problem.id],
+    recentEvents: [event, ...(currentProg.recentEvents ?? [])].slice(0, 20),
   };
 
   return { newProg, xpGained, leveledUp, newLevel, streakBonus };
 }
 
-// ── XP progress within current level ─────────────────────────
+// ── XP progress within current level ──────────────────────────
 export function xpProgress(prog) {
-  const currentLevelXp = xpForLevel(prog.level);
-  const nextLevelXp    = xpForLevel(prog.level + 1);
-  const xpIntoLevel    = prog.xp - currentLevelXp;
+  const currentLevelXp = xpForLevel(prog.level ?? 1);
+  const nextLevelXp    = xpForLevel((prog.level ?? 1) + 1);
+  const xpIntoLevel    = (prog.xp ?? 0) - currentLevelXp;
   const xpNeeded       = nextLevelXp - currentLevelXp;
   const pct            = Math.round((xpIntoLevel / xpNeeded) * 100);
   return { xpIntoLevel, xpNeeded, pct };
 }
 
-// ── Helper ─────────────────────────────────────────────────────
 function prevDay(dateStr) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() - 1);
